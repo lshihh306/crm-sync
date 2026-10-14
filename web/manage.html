@@ -2470,7 +2470,7 @@ const ibNames=r=>{ const a=r.analysis||{}; return [a.customer_name, r.contact_na
 function ibFindIn(list,r){
   const a=r.analysis||{}, ph=ibDigits(r.phone||a.phone);
   if(ph.length>=9){ const x=list.find(c=>{const d=ibDigits(c.phone);return d.length>=8&&d.slice(-8)===ph.slice(-8)}); if(x) return {item:x,how:"phone"}; }
-  const saved=String(r.contact_name||"").trim();
+  const saved=r.kind==="call"?String(r.contact_name||"").trim():""; // 폰 연락처 저장 이름은 통화 녹음 파일 이름에서만 알 수 있음
   if(saved){ const x=list.find(c=>String(c.contactName||"").trim()===saved); if(x) return {item:x,how:"saved"}; }
   for(const nm of ibNames(r)){ const x=list.find(c=>ibSameName(c.name,nm)); if(x) return {item:x,how:"name"}; }
   return null;
@@ -2596,7 +2596,7 @@ async function ibSave(r,card,vals){
     else if(act) data.nextAction=act;
     if(!p.car&&car) data.car=car;
     if(!p.phone&&(r.phone||a.phone)) data.phone=r.phone||a.phone;
-    if(!p.contactName&&r.contact_name) data.contactName=String(r.contact_name).trim(); // 다음부터는 저장 이름으로 바로 알아봄
+    if(!p.contactName&&r.kind==="call"&&r.contact_name) data.contactName=String(r.contact_name).trim(); // 다음부터는 저장 이름으로 바로 알아봄
     if((!p.pay||p.pay==="미정")&&ibPay(a.payment)!=="미정") data.pay=ibPay(a.payment);
     if(!(await psave(p.id,data,false))) throw "저장하지 못했어요";
     Object.assign(p,data); // 한 번에 여러 건이 붙을 때 기록이 덮이지 않게
@@ -2610,7 +2610,7 @@ async function ibSave(r,card,vals){
   const nid="p"+puid();
   const data={name, phone:r.phone||a.phone||"", car, source:r.kind==="call"?"전화 문의":"기타", stage:stage||"신규 문의", pay:ibPay(a.payment),
     nextDate:next||"", nextAction:act||"", inquiry:String(r.transcript||a.summary||"").slice(0,3000), memo:det.join(" / "), files:[], logs:[entry], lastContact:date};
-  if(r.contact_name) data.contactName=String(r.contact_name).trim();
+  if(r.kind==="call"&&r.contact_name) data.contactName=String(r.contact_name).trim();
   if(!(await psave(nid,data,true))) throw "저장하지 못했어요";
   if(!prospects.some(x=>x.id===nid)) prospects.push(Object.assign({id:nid},data)); // 같은 사람 다음 상담이 바로 여기에 붙도록
   gSyncProspect(nid,data,"");
