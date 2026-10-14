@@ -1087,6 +1087,8 @@ function renderAlertBar(){
   }
   if(ins) items.push(`<button class="abtn" type="button" data-go="alerts">📅 보험 만기 연락 <b>${ins}</b>명</button>`);
   const ibn=(typeof ibPendingCount==="function")?ibPendingCount():0;
+  const lowc=(typeof ibLowCredit==="function")?ibLowCredit():[];
+  lowc.forEach(x=>items.unshift(`<a class="abtn" style="border-color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger);text-decoration:none" href="${x.url}" target="_blank" rel="noopener">💳 ${x.name} 잔액 부족 · 충전하기 ›</a>`));
   if(ibn) items.unshift(`<button class="abtn call" type="button" data-go="inbox">📥 새 상담 <b>${ibn}</b>건 확인</button>`);
   bar.innerHTML = items.length ? `<span class="lbl">오늘 해야 할 일</span>${items.join("")}` : "";
   bar.hidden = !items.length;
@@ -2390,6 +2392,14 @@ function ibErrText(err){
 const ibLocalDate=r=>{ const v=r.occurred_at||r.created_at; if(!v) return todayStr(); const d=new Date(String(v).replace(" ","T")); return isNaN(d)?todayStr():pymd(d); };
 const ibWhen=r=>{ const v=r.occurred_at||r.created_at; const d=new Date(String(v||"").replace(" ","T")); return isNaN(d)?"":`${d.getMonth()+1}.${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const ibRelevant=r=>!(r.analysis&&r.analysis.relevant===false);
+// 잔액이 떨어지면 분석 오류 메시지로 알 수 있음 → 오늘 해야 할 일에 빨간 알림
+function ibLowCredit(){
+  const errs=ibRows.filter(r=>r.status==="error").map(r=>String(r.error||""));
+  const out=[];
+  if(errs.some(e=>/Claude 분석/.test(e)&&/credit balance|billing|insufficient|402/i.test(e))) out.push({name:"Claude API",url:"https://console.anthropic.com/settings/billing"});
+  if(errs.some(e=>/음성 변환/.test(e)&&/insufficient_quota|quota|billing|429/i.test(e))) out.push({name:"OpenAI",url:"https://platform.openai.com/settings/organization/billing"});
+  return out;
+}
 function ibPendingCount(){ return ibRows.filter(r=>(r.status==="pending"&&ibRelevant(r))||r.status==="error").length; }
 function ibBadge(){ const n=ibPendingCount(); $("inboxBadge").textContent=n; $("inboxBadge").hidden=!n; }
 async function ibLoad(){
@@ -2484,7 +2494,7 @@ function ibCardHTML(r){
     const old=Date.now()-new Date(String(r.created_at).replace(" ","T"))>5*60000;
     return `<div class="ib-card off" data-ibid="${esc(r.id)}">${head}<p class="ib-state">${old?"분석이 멈춘 것 같아요.":"⏳ Claude가 분석하는 중이에요…"}</p>${old?`<div class="ib-btns"><button class="btn" type="button" data-ibact="dismiss">지우기</button><button class="btn primary" type="button" data-ibact="retry">다시 분석</button></div>`:""}</div>`;
   }
-  if(r.status==="error") return `<div class="ib-card err" data-ibid="${esc(r.id)}">${head}<p class="ib-sum" style="color:var(--danger)">분석하지 못했어요: ${esc(String(r.error||"").slice(0,160))}</p>${raw}<div class="ib-btns"><button class="btn" type="button" data-ibact="dismiss">지우기</button><button class="btn primary" type="button" data-ibact="retry">다시 분석</button></div></div>`;
+  if(r.status==="error") return `<div class="ib-card err" data-ibid="${esc(r.id)}">${head}<p class="ib-sum" style="color:var(--danger)">${/credit balance|insufficient_quota|quota|billing/i.test(r.error||"")?`💳 ${/음성 변환/.test(r.error||"")?"OpenAI":"Claude API"} 잔액이 부족해서 분석하지 못했어요. 충전한 뒤 <b>다시 분석</b>을 눌러 주세요.`:"분석하지 못했어요: "+esc(String(r.error||"").slice(0,160))}</p>${raw}<div class="ib-btns"><button class="btn" type="button" data-ibact="dismiss">지우기</button><button class="btn primary" type="button" data-ibact="retry">다시 분석</button></div></div>`;
   const rel=ibRelevant(r), tgt=ibDefaultTarget(r);
   const det=(Array.isArray(a.details)?a.details:[]).filter(Boolean);
   const nextTxt=[a.next_date?pshort(a.next_date):"", a.next_time||"", a.next_action||""].filter(Boolean).join(" · ");
