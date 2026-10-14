@@ -414,6 +414,9 @@ label.full{grid-column:1/-1}
 .ib-raw summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--accent)}
 .ib-raw pre{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--sans);font-size:12.5px;line-height:1.5;max-height:260px;overflow:auto}
 .ib-state{font-size:12.5px;color:var(--muted);text-align:center;margin:0}
+.ib-dup{background:var(--warn-soft);color:var(--fg);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.55}
+.ib-dup b:first-child{color:var(--warn)}
+.ib-dup ul{margin:6px 0 0;padding-left:18px}
 @media (max-width:560px){.ib-edit{grid-template-columns:1fr}}
 </style>
 
@@ -2422,8 +2425,10 @@ function ibAutoVals(r){
 function ibAutoOk(r){
   if(r.status!=="pending"||!ibRelevant(r)) return false;
   const a=r.analysis||{}, v=ibAutoVals(r);
-  // 이미 있는 고객과 이름·번호가 같으면 확신도와 상관없이 그 고객에 덧붙임
-  if(v.target.startsWith("p:")||v.target.startsWith("c:")) return true;
+  // 번호나 연락처 저장 이름이 같으면 확실히 같은 사람 → 확신도와 상관없이 덧붙임
+  if(v.target.startsWith("p:")||v.target.startsWith("c:")) return ibSure(r);
+  // 이름만 같은 기존 고객이 있으면(동명이인 가능) 새로 만들지 말고 입력함에서 직접 고르게
+  if(ibNameCandidates(r).length) return false;
   if(!(+a.confidence>=IB_AUTO_MIN)) return false;
   if(v.target==="ev") return false;            // 개인 일정은 직접 확인
   if(v.target==="new" && !v.name) return false; // 누군지 모르면 직접 확인
@@ -2459,14 +2464,27 @@ const ibCleanName=s=>String(s||"").replace(/\(.*?\)/g,"").replace(/\s/g,"").repl
 // 같은 사람인지: 완전히 같거나, 3글자 이상 이름이 다른 쪽 안에 들어 있으면 같은 사람
 const ibSameName=(x,y)=>{ const a=ibCleanName(x), b=ibCleanName(y); if(a.length<2||b.length<2) return false; if(a===b) return true; const [s1,l1]=a.length<=b.length?[a,b]:[b,a]; return s1.length>=3 && l1.includes(s1); };
 const ibNames=r=>{ const a=r.analysis||{}; return [a.customer_name, r.contact_name].filter(Boolean); };
-function ibFindIn(list,r,nameKey){
+// 같은 사람 찾기 → {item, how}
+//  how "phone": 전화번호 뒤 8자리가 같음 · "saved": 폰 연락처 저장 이름이 완전히 같음 → 확실, 자동으로 덧붙임
+//  how "name": 이름만 같음 → 동명이인일 수 있어서 상담 입력함에서 직접 고름
+function ibFindIn(list,r){
   const a=r.analysis||{}, ph=ibDigits(r.phone||a.phone);
-  if(ph.length>=9){ const x=list.find(c=>{const d=ibDigits(c.phone);return d.length>=8&&d.slice(-8)===ph.slice(-8)}); if(x) return x; }
-  for(const nm of ibNames(r)){ const x=list.find(c=>ibSameName(c[nameKey],nm)); if(x) return x; }
+  if(ph.length>=9){ const x=list.find(c=>{const d=ibDigits(c.phone);return d.length>=8&&d.slice(-8)===ph.slice(-8)}); if(x) return {item:x,how:"phone"}; }
+  const saved=String(r.contact_name||"").trim();
+  if(saved){ const x=list.find(c=>String(c.contactName||"").trim()===saved); if(x) return {item:x,how:"saved"}; }
+  for(const nm of ibNames(r)){ const x=list.find(c=>ibSameName(c.name,nm)); if(x) return {item:x,how:"name"}; }
   return null;
 }
-const ibMatchProspect=r=>ibFindIn(prospects,r,"name");
-const ibMatchCustomer=r=>ibFindIn(all,r,"name");
+// 이름이 같은 후보 전부 (동명이인 표시용)
+function ibNameCandidates(r){
+  const out=[], seen=new Set(), names=ibNames(r);
+  const add=(c,kind)=>{ const k=kind+c.id; if(seen.has(k)) return; if(names.some(nm=>ibSameName(c.name,nm))){ seen.add(k); out.push({c,kind}); } };
+  prospects.forEach(c=>add(c,"p")); all.forEach(c=>add(c,"c"));
+  return out;
+}
+const ibMatchProspect=r=>{ const m=ibFindIn(prospects,r); return m?m.item:null; };
+const ibMatchCustomer=r=>{ const m=ibFindIn(all,r); return m?m.item:null; };
+const ibSure=r=>{ const m=ibFindIn(prospects,r)||ibFindIn(all,r); return !!m && m.how!=="name"; };
 function ibDefaultTarget(r){
   const a=r.analysis||{}, p=ibMatchProspect(r);
   if(p) return "p:"+p.id;
@@ -2501,6 +2519,8 @@ function ibCardHTML(r){
   const name=a.customer_name||r.contact_name||"";
   return `<div class="ib-card${rel?"":" off"}" data-ibid="${esc(r.id)}">${head}
     ${rel?"":`<p class="ib-match">차량 상담과 관련 없어 보여요${a.category?` (${esc(a.category)})`:""}</p>`}
+    ${(()=>{ if(ibSure(r)) return ""; const cs=ibNameCandidates(r); if(!cs.length) return "";
+      return `<div class="ib-dup"><b>⚠️ 같은 이름의 고객이 ${cs.length}명 있어요.</b> 같은 사람이면 아래 "어디에 넣을까요"에서 그 고객을, 다른 사람이면 "새 가망 고객으로 등록"을 고르세요.<ul>${cs.map(({c,kind})=>`<li>${kind==="p"?"가망":"출고"} · <b>${esc(c.name||"")}</b>${(kind==="p"?c.car:c.model)?" · "+esc(kind==="p"?c.car:c.model):""}${kind==="p"&&c.stage?" · "+esc(c.stage):""}${c.phone?" · ☎ "+esc(String(c.phone).slice(-4)):""}${kind==="p"&&c.lastContact?" · 마지막 연락 "+esc(fmt(c.lastContact).slice(5)):""}</li>`).join("")}</ul></div>`; })()}
     ${a.summary?`<p class="ib-sum">${esc(a.summary)}</p>`:""}
     ${det.length?`<ul class="ib-det">${det.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>`:""}
     ${nextTxt?`<span class="ib-next">→ ${esc(nextTxt)}</span>`:""}
@@ -2576,6 +2596,7 @@ async function ibSave(r,card,vals){
     else if(act) data.nextAction=act;
     if(!p.car&&car) data.car=car;
     if(!p.phone&&(r.phone||a.phone)) data.phone=r.phone||a.phone;
+    if(!p.contactName&&r.contact_name) data.contactName=String(r.contact_name).trim(); // 다음부터는 저장 이름으로 바로 알아봄
     if((!p.pay||p.pay==="미정")&&ibPay(a.payment)!=="미정") data.pay=ibPay(a.payment);
     if(!(await psave(p.id,data,false))) throw "저장하지 못했어요";
     Object.assign(p,data); // 한 번에 여러 건이 붙을 때 기록이 덮이지 않게
@@ -2589,6 +2610,7 @@ async function ibSave(r,card,vals){
   const nid="p"+puid();
   const data={name, phone:r.phone||a.phone||"", car, source:r.kind==="call"?"전화 문의":"기타", stage:stage||"신규 문의", pay:ibPay(a.payment),
     nextDate:next||"", nextAction:act||"", inquiry:String(r.transcript||a.summary||"").slice(0,3000), memo:det.join(" / "), files:[], logs:[entry], lastContact:date};
+  if(r.contact_name) data.contactName=String(r.contact_name).trim();
   if(!(await psave(nid,data,true))) throw "저장하지 못했어요";
   if(!prospects.some(x=>x.id===nid)) prospects.push(Object.assign({id:nid},data)); // 같은 사람 다음 상담이 바로 여기에 붙도록
   gSyncProspect(nid,data,"");
