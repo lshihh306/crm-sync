@@ -169,6 +169,15 @@ Deno.serve(async (req) => {
   if (!APP_TOKEN || req.headers.get("x-app-token") !== APP_TOKEN) return json({ error: "unauthorized" }, 401);
 
   const url = new URL(req.url);
+  // 고객 삭제 시: 그 고객으로 저장된 상담 기록과 녹음·캡처 파일을 모두 지움 (POST ?purge=p:<고객 id>)
+  const purge = url.searchParams.get("purge");
+  if (purge) {
+    const { data: rows } = await db.from("inbox").select("id, storage_path").eq("saved_target", purge);
+    const paths = (rows ?? []).map((r) => r.storage_path).filter(Boolean) as string[];
+    if (paths.length) await db.storage.from("uploads").remove(paths);
+    if (rows && rows.length) await db.from("inbox").delete().in("id", rows.map((r) => r.id));
+    return json({ ok: true, purged: rows?.length ?? 0, files: paths.length });
+  }
   // 재처리: POST ?retry=<id>
   const retry = url.searchParams.get("retry");
   if (retry) {

@@ -913,7 +913,7 @@ $("delWrap").addEventListener("click",async e=>{
   if(e.target.id==="delBtn"){ $("delWrap").innerHTML=`<span class="confirm">정말 삭제할까요? <button class="btn danger" type="button" id="delYes">삭제</button><button class="btn ghost" type="button" id="delNo">아니요</button></span>`; }
   else if(e.target.id==="delNo"){ $("delWrap").innerHTML=`<button class="btn danger ghost" type="button" id="delBtn">삭제</button>`; }
   else if(e.target.id==="delYes" && editingId){
-    try{ await col.doc(editingId).delete(); closeForm(); toast("삭제했어요."); }catch(err){ toast("삭제하지 못했어요. 잠시 후 다시 시도해 주세요."); }
+    try{ const did=editingId; await col.doc(did).delete(); ibPurge("c:"+did); closeForm(); toast("삭제했어요."); }catch(err){ toast("삭제하지 못했어요. 잠시 후 다시 시도해 주세요."); }
   }
 });
 
@@ -1788,7 +1788,7 @@ function pOpenEdit(id,dateForNew){
   const del=$("pcDel");
   if(del) del.onclick=async()=>{
     if(del.dataset.arm!=="1"){del.dataset.arm="1";del.textContent="한 번 더 누르면 삭제";return}
-    try{await pcol.doc(id).delete();if(c.gcalId)gDel(c.gcalId);await pdrop([...pAllFiles(c),...st.added]);st.added=[];pClose(true);toast("고객을 삭제했어요")}catch(e){toast("삭제하지 못했어요.")}
+    try{await pcol.doc(id).delete();ibPurge("p:"+id);if(c.gcalId)gDel(c.gcalId);await pdrop([...pAllFiles(c),...st.added]);st.added=[];pClose(true);toast("고객을 삭제했어요")}catch(e){toast("삭제하지 못했어요.")}
   };
   $("pcSave").onclick=async()=>{
     if(st.busy){toast("파일을 올리는 중이에요. 잠시만 기다려 주세요");return}
@@ -2109,7 +2109,7 @@ function pOpenEvent(id, date, voice){
   const dn=$("pvDoneBtn"); if(dn) dn.onclick=async()=>{ try{ await pevcol.doc(id).update({done:!e.done}); pClose(); toast(e.done?"완료를 취소했어요":"완료했어요"); }catch(_){ toast("저장하지 못했어요."); } };
   const del=$("pvDel"); if(del) del.onclick=async()=>{
     if(del.dataset.arm!=="1"){del.dataset.arm="1";del.textContent="한 번 더 누르면 삭제";return}
-    try{ await pevcol.doc(id).delete(); if(e.gcalId) gDel(e.gcalId); pClose(); toast("일정을 삭제했어요"); }catch(_){ toast("삭제하지 못했어요."); }
+    try{ await pevcol.doc(id).delete(); ibPurge("e:"+id); if(e.gcalId) gDel(e.gcalId); pClose(); toast("일정을 삭제했어요"); }catch(_){ toast("삭제하지 못했어요."); }
   };
   $("pvSave").onclick=async()=>{
     pStopRec();
@@ -2134,7 +2134,7 @@ document.addEventListener("click",async ev=>{
   if(b.dataset.pevdel){
     if(b.dataset.arm!=="1"){ b.dataset.arm="1"; b.textContent="정말 삭제"; b.classList.add("arm"); setTimeout(()=>{ if(b.isConnected){ b.dataset.arm=""; b.textContent="삭제"; b.classList.remove("arm"); } },3000); return; }
     if(!pevcol) return; b.disabled=true;
-    try{ const de=pevents.find(x=>x.id===b.dataset.pevdel); await pevcol.doc(b.dataset.pevdel).delete(); if(de&&de.gcalId) gDel(de.gcalId); toast("일정을 삭제했어요"); }catch(_){ b.disabled=false; toast("삭제하지 못했어요."); }
+    try{ const de=pevents.find(x=>x.id===b.dataset.pevdel); await pevcol.doc(b.dataset.pevdel).delete(); ibPurge("e:"+b.dataset.pevdel); if(de&&de.gcalId) gDel(de.gcalId); toast("일정을 삭제했어요"); }catch(_){ b.disabled=false; toast("삭제하지 못했어요."); }
     return;
   }
   if(b.dataset.pevdone){ const e=pevents.find(x=>x.id===b.dataset.pevdone); if(!e||!pevcol) return; const d=b.dataset.d||e.date;
@@ -2442,7 +2442,7 @@ async function ibAutoRun(){
     if(!got.length) continue;
     try{
       const msg=await ibSave(r,null,ibAutoVals(r));
-      await sbSql(`update public.inbox set saved_to=${sqlq(msg)} where id=${sqlq(r.id)}`);
+      await sbSql(`update public.inbox set saved_to=${sqlq(msg)}, saved_target=${sqlq(ibLastTarget)} where id=${sqlq(r.id)}`);
       n++;
     }catch(err){
       await sbSql(`update public.inbox set status='pending', auto_saved=false, handled_at=null where id=${sqlq(r.id)}`);
@@ -2565,7 +2565,11 @@ async function ibMark(id,status){
   await sbSql(`update public.inbox set status=${sqlq(status)}, handled_at=now() where id=${sqlq(id)} returning id`);
   ibRows=ibRows.filter(x=>x.id!==id); ibBadge(); renderAlertBar();
 }
+let ibLastTarget="";
+// 고객·일정을 지우면 그 사람으로 저장된 상담 기록과 녹음·캡처 파일도 서버에서 함께 지움
+async function ibPurge(t){ if(!gmcp||!t) return; try{ await sbSql(`select public.purge_inbox(${sqlq(t)}) as rid`); }catch(_){} }
 async function ibSave(r,card,vals){
+  ibLastTarget="";
   const a=r.analysis||{}, v=k=>{ if(vals) return vals[k]||""; const el=card.querySelector(`[data-ib="${k}"]`);return el?el.value.trim():""};
   const target=v("target"), name=v("name"), car=v("car"), stage=v("stage"), next=v("next"), act=v("act");
   const date=ibLocalDate(r), label=(IB_KIND[r.kind]||"").replace(/^\S+\s/,"");
@@ -2578,7 +2582,7 @@ async function ibSave(r,card,vals){
     if(!pevcol) throw "저장소에 연결되지 않았어요";
     const d=next||date, now=new Date().toISOString(), eid="e"+puid();
     const data={date:d, time:a.next_time||"", title:[name,car].filter(Boolean).join(" ")||a.summary||"일정", memo:act||a.summary||"", cat:"auto", repeat:"", done:false, createdAt:now, updatedAt:now};
-    await pevcol.doc(eid).set(data); gSyncEvent(eid,data,null);
+    await pevcol.doc(eid).set(data); gSyncEvent(eid,data,null); ibLastTarget="e:"+eid;
     return `${pshort(d)} 개인 일정에 넣었어요`;
   }
   if(target.startsWith("c:")){
@@ -2586,6 +2590,7 @@ async function ibSave(r,card,vals){
     const line=`[${date}] ${label} · ${a.summary||""}${act?" → "+act:""}`;
     await col.doc(c.id).update({memo:(c.memo?c.memo+"\n":"")+line, updatedAt:new Date().toISOString()});
     if(next&&pevcol){ const now=new Date().toISOString(), eid="e"+puid(); const data={date:next,time:a.next_time||"",title:pBarLabel({name:c.name,car:c.model}),memo:act||a.summary||"",cat:"call",repeat:"",done:false,createdAt:now,updatedAt:now}; await pevcol.doc(eid).set(data); gSyncEvent(eid,data,null); }
+    ibLastTarget="c:"+c.id;
     return `${c.name||"출고 고객"}님 메모에 남겼어요${next?" · "+pshort(next)+" 연락 일정 추가":""}`;
   }
   if(target.startsWith("p:")){
@@ -2602,7 +2607,7 @@ async function ibSave(r,card,vals){
     Object.assign(p,data); // 한 번에 여러 건이 붙을 때 기록이 덮이지 않게
     const merged=Object.assign({},p);
     if(P_CONTRACT.includes(merged.stage)) pToCustomer(p.id,merged); else if(merged.stage==="해약") pCancelCustomer(p.id,p);
-    gSyncProspect(p.id,merged,p.gcalId);
+    gSyncProspect(p.id,merged,p.gcalId); ibLastTarget="p:"+p.id;
     return `${p.name}님 연락 기록에 넣었어요${next?" · 다음 연락 "+pshort(next):""}`;
   }
   // 새 가망 고객
@@ -2613,7 +2618,7 @@ async function ibSave(r,card,vals){
   if(r.kind==="call"&&r.contact_name) data.contactName=String(r.contact_name).trim();
   if(!(await psave(nid,data,true))) throw "저장하지 못했어요";
   if(!prospects.some(x=>x.id===nid)) prospects.push(Object.assign({id:nid},data)); // 같은 사람 다음 상담이 바로 여기에 붙도록
-  gSyncProspect(nid,data,"");
+  gSyncProspect(nid,data,""); ibLastTarget="p:"+nid;
   return `${name}님을 가망 고객으로 등록했어요${next?" · 다음 연락 "+pshort(next):""}`;
 }
 document.addEventListener("click",async e=>{
@@ -2624,7 +2629,7 @@ document.addEventListener("click",async e=>{
   try{
     if(act==="dismiss"){ await ibMark(id,"dismissed"); toast("무시했어요"); }
     else if(act==="retry"){ await sbSql(`select public.retry_inbox(${sqlq(id)}) as rid`); r.status="processing"; r.created_at=new Date().toISOString(); toast("다시 분석을 요청했어요. 잠시 뒤 새로고침하세요"); setTimeout(ibLoad,15000); }
-    else if(act==="save"){ const msg=await ibSave(r,card); await ibMark(id,"approved"); sbSql(`update public.inbox set saved_to=${sqlq(msg)} where id=${sqlq(id)}`).catch(()=>{}); toast(msg); if(ibAutoOn) await ibAutoRun(); }
+    else if(act==="save"){ const msg=await ibSave(r,card); await ibMark(id,"approved"); sbSql(`update public.inbox set saved_to=${sqlq(msg)}, saved_target=${sqlq(ibLastTarget)} where id=${sqlq(id)}`).catch(()=>{}); toast(msg); if(ibAutoOn) await ibAutoRun(); }
     ibRender(true);
   }catch(err){
     toast(typeof err==="string"?err:(err&&err.code?ibErrText(err):"처리하지 못했어요. 잠시 후 다시 시도해 주세요."));
