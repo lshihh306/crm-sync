@@ -62,7 +62,7 @@ object Scanner {
         )
         val sel = "${MediaStore.MediaColumns.DATE_ADDED} > ? AND ${MediaStore.MediaColumns.IS_PENDING} = 0 AND (" +
             "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE '%Call%' OR " +
-            "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE '통화 녹음%' OR ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE 'Call recording%')"
+            "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE '통화 %' OR ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE 'Call recording%')"
         val now = System.currentTimeMillis() / 1000
         var newSince = since
         ctx.contentResolver.query(audioUri, proj, sel, arrayOf(since.toString()), "${MediaStore.MediaColumns.DATE_ADDED} ASC")?.use { c ->
@@ -73,11 +73,17 @@ object Scanner {
                 val modified = c.getLong(4)
                 val mime = c.getString(5) ?: "audio/mp4"
                 val size = c.getLong(6)
-                // 녹음 파일이 아직 쓰이는 중일 수 있으니 수정된 지 10초 안 된 건 다음 차례에
-                if (now - modified < 10 || size <= 0) { prefs.sinceAudio = newSince; return true }
+                // 녹음 파일이 아직 쓰이는 중일 수 있으니 수정된 지 30초 안 된 건 다음 차례에
+                if (now - modified < 30 || size <= 0) { prefs.sinceAudio = newSince; return true }
                 val key = "a:$id:$name"
                 if (!prefs.isSent(key)) {
-                    val r = Uploader.sendFile(ctx, ContentUris.withAppendedId(audioUri, id), name, mime, "call", isoKst(modified))
+                    // 갤럭시 녹음(3GP)을 표준 m4a로 변환해서 보냄. 변환이 안 되면 원본 그대로
+                    val src = ContentUris.withAppendedId(audioUri, id)
+                    val tmp = java.io.File(ctx.cacheDir, "call_upload.m4a")
+                    val conv = AudioConverter.toM4a(ctx, src, tmp)
+                    val r = if (conv != null) Uploader.sendFile(ctx, android.net.Uri.fromFile(conv), name, "audio/mp4", "call", isoKst(modified))
+                            else Uploader.sendFile(ctx, src, name, mime, "call", isoKst(modified))
+                    tmp.delete()
                     prefs.log("📞 $name — ${r.message}")
                     if (!r.ok) { prefs.sinceAudio = newSince; return false }
                     prefs.markSent(key)

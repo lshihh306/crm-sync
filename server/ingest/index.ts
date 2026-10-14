@@ -23,7 +23,7 @@ function kstNow() {
 
 // 갤럭시 통화녹음 파일명 예: "통화 녹음 홍길동_261014_101900.m4a", "Call recording 01012345678_261014_101900.m4a"
 function parseCallFileName(name: string) {
-  const base = name.replace(/\.[^.]+$/, "").replace(/^(통화\s*녹음|Call\s*recording)\s*/i, "");
+  const base = name.replace(/\.[^.]+$/, "").replace(/^(통화\s*녹음|통화|Call\s*recording)\s+/i, "");
   const m = base.match(/^(.*)_(\d{6})_(\d{6})$/);
   let who = m ? m[1] : base;
   let at: string | null = null;
@@ -41,9 +41,14 @@ function parseCallFileName(name: string) {
 async function transcribe(file: Blob, fileName: string): Promise<string> {
   if (!OPENAI_KEY) throw new Error("OPENAI_API_KEY 비밀값이 없어요");
   let lastErr = "";
+  // 한글 파일 이름은 OpenAI가 형식을 못 알아봐서, 영문 이름 + 올바른 형식으로 다시 감싸서 보냄
+  const ext = ((fileName.match(/\.([a-z0-9]+)$/i)?.[1]) ?? "m4a").toLowerCase();
+  const MIME: Record<string, string> = { m4a: "audio/mp4", mp4: "audio/mp4", "3gp": "audio/mp4", aac: "audio/mp4", mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", amr: "audio/amr", webm: "audio/webm", flac: "audio/flac" };
+  const safeExt = ["3gp", "aac"].includes(ext) ? "m4a" : ext;
+  const audio = new Blob([await file.arrayBuffer()], { type: MIME[ext] ?? "audio/mp4" });
   for (const model of STT_MODELS) {
     const fd = new FormData();
-    fd.append("file", file, fileName || "call.m4a");
+    fd.append("file", audio, `call.${safeExt}`);
     fd.append("model", model);
     fd.append("language", "ko");
     const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -197,8 +202,14 @@ Deno.serve(async (req) => {
 
   // 같은 파일 중복 전송 방지
   if (fileName) {
-    const { data: dup } = await db.from("inbox").select("id").eq("file_name", fileName).limit(1);
-    if (dup && dup.length) return json({ ok: true, id: dup[0].id, duplicate: true });
+    const { data: dup } = await db.from("inbox").select("id, status, storage_path").eq("file_name", fileName).limit(1);
+    if (dup && dup.length) {
+      // 예전에 실패한 건 지우고 새로 받음 (앱 업데이트 후 다시 보내기)
+      if (dup[0].status === "error") {
+        if (dup[0].storage_path) await db.storage.from("uploads").remove([dup[0].storage_path]);
+        await db.from("inbox").delete().eq("id", dup[0].id);
+      } else return json({ ok: true, id: dup[0].id, duplicate: true });
+    }
   }
 
   let storagePath: string | null = null;

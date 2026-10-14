@@ -44,7 +44,12 @@ class ShareActivity : AppCompatActivity() {
                         val body = contentResolver.openInputStream(u)?.use { it.readBytes().toString(Charsets.UTF_8) }.orEmpty()
                         Uploader.sendText(ctx, (if (!text.isNullOrBlank()) "$text\n\n" else "") + body.takeLast(60000), "text")
                     }
-                    mime.startsWith("audio/") -> Uploader.sendFile(ctx, u, name, mime, "call")
+                    mime.startsWith("audio/") -> {
+                        val tmp = java.io.File(cacheDir, "share_upload.m4a")
+                        val conv = AudioConverter.toM4a(ctx, u, tmp)
+                        val r0 = if (conv != null) Uploader.sendFile(ctx, android.net.Uri.fromFile(conv), name, "audio/mp4", "call") else Uploader.sendFile(ctx, u, name, mime, "call")
+                        tmp.delete(); r0
+                    }
                     else -> {
                         val kind = when {
                             prefs.keys(prefs.kakaoKeys).any { name.contains(it, true) } -> "kakao"
