@@ -1,0 +1,210 @@
+// ingest: 갤럭시 앱이 보내는 통화녹음 / 카톡·문자 캡처 / 텍스트를 받아
+// 1) 파일 저장  2) (녹음이면) 텍스트 변환  3) Claude 분석  4) inbox에 "확인 대기"로 저장
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const APP_TOKEN = Deno.env.get("APP_TOKEN") ?? "";
+const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
+const OPENAI_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+const CLAUDE_MODELS = [Deno.env.get("ANTHROPIC_MODEL") ?? "claude-haiku-5-5", "claude-haiku-4-5"];
+const STT_MODELS = [Deno.env.get("OPENAI_STT_MODEL") ?? "gpt-4o-mini-transcribe", "whisper-1"];
+
+const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+
+function kstNow() {
+  const d = new Date(Date.now() + 9 * 3600 * 1000);
+  return d.toISOString().slice(0, 16).replace("T", " ");
+}
+
+// 갤럭시 통화녹음 파일명 예: "통화 녹음 홍길동_261014_101900.m4a", "Call recording 01012345678_261014_101900.m4a"
+function parseCallFileName(name: string) {
+  const base = name.replace(/\.[^.]+$/, "").replace(/^(통화\s*녹음|Call\s*recording)\s*/i, "");
+  const m = base.match(/^(.*)_(\d{6})_(\d{6})$/);
+  let who = m ? m[1] : base;
+  let at: string | null = null;
+  if (m) {
+    const [y, mo, d] = [m[2].slice(0, 2), m[2].slice(2, 4), m[2].slice(4, 6)];
+    const [h, mi, s] = [m[3].slice(0, 2), m[3].slice(2, 4), m[3].slice(4, 6)];
+    at = `20${y}-${mo}-${d}T${h}:${mi}:${s}+09:00`;
+  }
+  who = who.trim();
+  const digits = who.replace(/[^0-9]/g, "");
+  const phone = digits.length >= 9 && digits.length === who.replace(/[\s-]/g, "").length ? digits : null;
+  return { name: phone ? null : who || null, phone, at };
+}
+
+async function transcribe(file: Blob, fileName: string): Promise<string> {
+  if (!OPENAI_KEY) throw new Error("OPENAI_API_KEY 비밀값이 없어요");
+  let lastErr = "";
+  for (const model of STT_MODELS) {
+    const fd = new FormData();
+    fd.append("file", file, fileName || "call.m4a");
+    fd.append("model", model);
+    fd.append("language", "ko");
+    const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${OPENAI_KEY}` },
+      body: fd,
+    });
+    if (r.ok) return ((await r.json()).text ?? "").trim();
+    lastErr = `${model}: ${r.status} ${(await r.text()).slice(0, 300)}`;
+  }
+  throw new Error("음성 변환 실패 - " + lastErr);
+}
+
+const SYSTEM = `너는 현대자동차 영업사원의 상담 기록 비서다. 통화 녹취, 카카오톡 대화 캡처, 문자 캡처, 메모를 읽고 영업 관리용으로 정리한다.
+반드시 아래 JSON 하나만 출력한다. 설명, 코드블록 금지.
+{
+ "relevant": true|false,            // 차량 상담·고객 관리와 관련 있으면 true (광고, 스팸, 가족 잡담이면 false)
+ "category": "가망"|"출고고객"|"개인일정"|"기타",
+ "customer_name": string|null,      // 고객 이름. 모르면 null
+ "phone": string|null,              // 숫자만
+ "car": string|null,                // 관심 차종/트림 (예: "싼타페 HEV 캘리그래피")
+ "payment": string|null,            // 할부/리스/렌트/현금 등 언급된 결제 방식
+ "summary": string,                 // 상담 핵심 2~3줄, 구어체 아닌 간결한 메모체
+ "details": string[],               // 견적 조건, 옵션, 색상, 경쟁 견적, 중고차 매입, 출고 희망 시기 등 사실만 짧게
+ "next_action": string,             // 다음에 할 일 한 줄, 15자 내외 (예: "중고차 시세 확인 후 연락")
+ "next_date": "YYYY-MM-DD"|null,    // 다음 연락/약속 날짜. 대화에 근거가 있을 때만
+ "next_time": "HH:MM"|null,
+ "schedule_title": string|null,     // 일정 제목은 "고객이름 차종" 형식만 (예: "홍길동 싼타페")
+ "stage": "신규 문의"|"상담 중"|"계약"|"보류"|"해약"|null,
+ "temperature": "상"|"중"|"하"|null, // 구매 가능성
+ "confidence": number                // 0~1, 고객/내용 파악 확신도
+}
+규칙: 추측으로 날짜를 만들지 말 것. "내일", "다음 주 화요일" 같은 표현은 기준 시각으로 실제 날짜를 계산한다. 할인 금액 등 숫자는 원문에 있는 그대로만 적는다.`;
+
+async function analyze(parts: { text?: string; image?: { b64: string; type: string } }, meta: string) {
+  if (!ANTHROPIC_KEY) throw new Error("ANTHROPIC_API_KEY 비밀값이 없어요");
+  const content: unknown[] = [];
+  if (parts.image) content.push({ type: "image", source: { type: "base64", media_type: parts.image.type, data: parts.image.b64 } });
+  content.push({ type: "text", text: `기준 시각(한국): ${kstNow()}\n${meta}\n\n${parts.text ? "내용:\n" + parts.text : "위 캡처 이미지의 대화를 읽고 정리해."}` });
+  let lastErr = "";
+  for (const model of CLAUDE_MODELS) {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model, max_tokens: 1500, system: SYSTEM, messages: [{ role: "user", content }] }),
+    });
+    if (!r.ok) {
+      lastErr = `${model}: ${r.status} ${(await r.text()).slice(0, 300)}`;
+      if (r.status === 404 || r.status === 400) continue;
+      throw new Error("Claude 분석 실패 - " + lastErr);
+    }
+    const out = await r.json();
+    const txt = (out.content ?? []).filter((c: { type: string }) => c.type === "text").map((c: { text: string }) => c.text).join("");
+    const s = txt.indexOf("{"), e = txt.lastIndexOf("}");
+    if (s < 0 || e < 0) throw new Error("Claude 응답 해석 실패: " + txt.slice(0, 200));
+    const parsed = JSON.parse(txt.slice(s, e + 1));
+    // 이미지에서 읽은 대화 원문은 transcript로 보관
+    return { ...parsed, _model: model };
+  }
+  throw new Error("Claude 분석 실패 - " + lastErr);
+}
+
+function b64(buf: ArrayBuffer) {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+async function handle(id: string, kind: string, file: Blob | null, fileName: string, text: string, info: { name: string | null; phone: string | null }) {
+  try {
+    let transcript = text;
+    let result;
+    const meta = [
+      `종류: ${({ call: "통화 녹취", kakao: "카카오톡 캡처", sms: "문자 캡처", text: "메모/공유 텍스트", image: "이미지" } as Record<string, string>)[kind]}`,
+      fileName ? `파일명: ${fileName}` : "",
+      info.name ? `상대 이름(연락처 저장명): ${info.name}` : "",
+      info.phone ? `상대 번호: ${info.phone}` : "",
+    ].filter(Boolean).join("\n");
+
+    if (kind === "call") {
+      transcript = await transcribe(file!, fileName);
+      await db.from("inbox").update({ transcript }).eq("id", id);
+      result = await analyze({ text: transcript || "(녹음 내용이 비어 있음)" }, meta);
+    } else if (file && (kind === "kakao" || kind === "sms" || kind === "image")) {
+      const type = file.type && file.type.startsWith("image/") ? file.type : (fileName.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
+      result = await analyze({ image: { b64: b64(await file.arrayBuffer()), type } }, meta);
+    } else {
+      result = await analyze({ text }, meta);
+    }
+    await db.from("inbox").update({
+      analysis: result,
+      transcript,
+      contact_name: info.name ?? result.customer_name ?? null,
+      phone: info.phone ?? result.phone ?? null,
+      status: "pending",
+      processed_at: new Date().toISOString(),
+      error: null,
+    }).eq("id", id);
+  } catch (err) {
+    await db.from("inbox").update({ status: "error", error: String(err?.message ?? err) }).eq("id", id);
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "GET") return json({ ok: true, service: "lsh-crm ingest" });
+  if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  if (!APP_TOKEN || req.headers.get("x-app-token") !== APP_TOKEN) return json({ error: "unauthorized" }, 401);
+
+  const url = new URL(req.url);
+  // 재처리: POST ?retry=<id>
+  const retry = url.searchParams.get("retry");
+  if (retry) {
+    const { data: row } = await db.from("inbox").select("*").eq("id", retry).single();
+    if (!row) return json({ error: "not found" }, 404);
+    let file: Blob | null = null;
+    if (row.storage_path) {
+      const { data } = await db.storage.from("uploads").download(row.storage_path);
+      file = data;
+    }
+    await db.from("inbox").update({ status: "processing", error: null }).eq("id", retry);
+    EdgeRuntime.waitUntil(handle(retry, row.kind, file, row.file_name ?? "", row.transcript ?? "", { name: row.contact_name, phone: row.phone }));
+    return json({ ok: true, id: retry, retried: true });
+  }
+
+  const form = await req.formData();
+  const kind = String(form.get("kind") ?? "");
+  if (!["call", "kakao", "sms", "text", "image"].includes(kind)) return json({ error: "kind 값이 잘못됐어요" }, 400);
+  const file = form.get("file") as File | null;
+  const text = String(form.get("text") ?? "");
+  const fileName = String(form.get("file_name") ?? file?.name ?? "");
+  if (!file && !text) return json({ error: "file 또는 text가 필요해요" }, 400);
+
+  let info = { name: (form.get("contact_name") as string) || null, phone: ((form.get("phone") as string) || "").replace(/[^0-9]/g, "") || null };
+  let occurredAt = (form.get("occurred_at") as string) || null;
+  if (kind === "call" && fileName) {
+    const p = parseCallFileName(fileName);
+    info = { name: info.name ?? p.name, phone: info.phone ?? p.phone };
+    occurredAt = occurredAt ?? p.at;
+  }
+
+  // 같은 파일 중복 전송 방지
+  if (fileName) {
+    const { data: dup } = await db.from("inbox").select("id").eq("file_name", fileName).limit(1);
+    if (dup && dup.length) return json({ ok: true, id: dup[0].id, duplicate: true });
+  }
+
+  let storagePath: string | null = null;
+  if (file) {
+    const ext = (fileName.match(/\.[a-z0-9]+$/i)?.[0] ?? "").toLowerCase();
+    storagePath = `${kind}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}${ext}`;
+    const { error } = await db.storage.from("uploads").upload(storagePath, file, { contentType: file.type || undefined });
+    if (error) return json({ error: "파일 저장 실패: " + error.message }, 500);
+  }
+
+  const { data: row, error } = await db.from("inbox").insert({
+    kind, file_name: fileName || null, storage_path: storagePath, occurred_at: occurredAt,
+    phone: info.phone, contact_name: info.name, transcript: text || null, status: "processing",
+  }).select("id").single();
+  if (error) return json({ error: error.message }, 500);
+
+  EdgeRuntime.waitUntil(handle(row.id, kind, file, fileName, text, info));
+  return json({ ok: true, id: row.id });
+});
