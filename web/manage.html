@@ -2109,7 +2109,7 @@ function pOpenEvent(id, date, voice){
   const dn=$("pvDoneBtn"); if(dn) dn.onclick=async()=>{ try{ await pevcol.doc(id).update({done:!e.done}); pClose(); toast(e.done?"완료를 취소했어요":"완료했어요"); }catch(_){ toast("저장하지 못했어요."); } };
   const del=$("pvDel"); if(del) del.onclick=async()=>{
     if(del.dataset.arm!=="1"){del.dataset.arm="1";del.textContent="한 번 더 누르면 삭제";return}
-    try{ await pevcol.doc(id).delete(); ibPurge("e:"+id); if(e.gcalId) gDel(e.gcalId); pClose(); toast("일정을 삭제했어요"); }catch(_){ toast("삭제하지 못했어요."); }
+    try{ await pevcol.doc(id).delete(); if(e.gcalId) gDel(e.gcalId); pClose(); toast("일정을 삭제했어요"); }catch(_){ toast("삭제하지 못했어요."); }
   };
   $("pvSave").onclick=async()=>{
     pStopRec();
@@ -2134,7 +2134,7 @@ document.addEventListener("click",async ev=>{
   if(b.dataset.pevdel){
     if(b.dataset.arm!=="1"){ b.dataset.arm="1"; b.textContent="정말 삭제"; b.classList.add("arm"); setTimeout(()=>{ if(b.isConnected){ b.dataset.arm=""; b.textContent="삭제"; b.classList.remove("arm"); } },3000); return; }
     if(!pevcol) return; b.disabled=true;
-    try{ const de=pevents.find(x=>x.id===b.dataset.pevdel); await pevcol.doc(b.dataset.pevdel).delete(); ibPurge("e:"+b.dataset.pevdel); if(de&&de.gcalId) gDel(de.gcalId); toast("일정을 삭제했어요"); }catch(_){ b.disabled=false; toast("삭제하지 못했어요."); }
+    try{ const de=pevents.find(x=>x.id===b.dataset.pevdel); await pevcol.doc(b.dataset.pevdel).delete(); if(de&&de.gcalId) gDel(de.gcalId); toast("일정을 삭제했어요"); }catch(_){ b.disabled=false; toast("삭제하지 못했어요."); }
     return;
   }
   if(b.dataset.pevdone){ const e=pevents.find(x=>x.id===b.dataset.pevdone); if(!e||!pevcol) return; const d=b.dataset.d||e.date;
@@ -2566,7 +2566,7 @@ async function ibMark(id,status){
   ibRows=ibRows.filter(x=>x.id!==id); ibBadge(); renderAlertBar();
 }
 let ibLastTarget="";
-// 고객·일정을 지우면 그 사람으로 저장된 상담 기록과 녹음·캡처 파일도 서버에서 함께 지움
+// 고객을 지우면 그 사람으로 저장된 상담 기록과 녹음·캡처 파일도 서버에서 함께 지움
 async function ibPurge(t){ if(!gmcp||!t) return; try{ await sbSql(`select public.purge_inbox(${sqlq(t)}) as rid`); }catch(_){} }
 async function ibSave(r,card,vals){
   ibLastTarget="";
