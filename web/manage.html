@@ -2366,7 +2366,7 @@ $("csvBtn").onclick=exportExcel;
 
 // ===== 상담 입력함: 갤럭시 '상담 자동전송' 앱 → 서버(Supabase) → Claude 분석 결과를 확인하고 저장 =====
 const SB="Supabase", SB_PROJECT="fyyfeqwthbgetwkayodu";
-let ibRows=[], ibState="wait", ibMsg="", ibBusy=false, ibStarted=false, ibAutoOn=true, ibRecent=[];
+let ibRows=[], ibState="wait", ibMsg="", ibBusy=false, ibStarted=false, ibAutoOn=true, ibRecent=[], ibBlocks=[];
 const IB_AUTO_MIN=0.7; // Claude 확신도가 이 이상이면 확인 없이 자동 저장
 const IB_KIND={call:"📞 통화",kakao:"💛 카톡",sms:"💬 문자",text:"📝 메모",image:"🖼 캡처"};
 const sqlq=v=>v==null?"null":"'"+String(v).replace(/'/g,"''")+"'";
@@ -2428,6 +2428,7 @@ async function ibLoad(){
     ibState="on"; ibMsg="";
     if(ibAutoOn && loaded && ploaded && !poffline) await ibAutoRun();
     await ibCleanOrphans();
+    ibBlocks=await sbSql("select id, value from public.inbox_block order by created_at desc").catch(()=>ibBlocks);
     ibRecent=(await sbSql("select id, kind, occurred_at, created_at, contact_name, analysis->>'summary' as summary, saved_to, saved_target from public.inbox where auto_saved and handled_at > now() - interval '3 days' order by handled_at desc limit 20")).filter(x=>ibTargetAlive(x.saved_target));
   }catch(err){ ibState="warn"; ibMsg=ibErrText(err); }
   finally{ ibBusy=false; }
@@ -2552,7 +2553,7 @@ function ibCardHTML(r){
       <div class="pc-fld"><label>다음 연락일</label><input type="date" data-ib="next" value="${esc(a.next_date||"")}"></div>
       <div class="pc-fld" style="grid-column:1/-1"><label>다음에 할 일 (한 줄)</label><input data-ib="act" maxlength="40" value="${esc(a.next_action||"")}" placeholder="예: 중고차 시세 확인 후 연락"></div>
     </div>
-    <div class="ib-btns"><button class="btn ghost" type="button" data-ibact="dismiss">무시</button><button class="btn primary" type="button" data-ibact="save">${rel?"확인 · 저장":"그래도 저장"}</button></div>
+    <div class="ib-btns"><button class="btn ghost" type="button" data-ibact="block" title="이 사람의 통화·카톡·문자는 앞으로 분석하지 않아요">🚫 앞으로 제외</button><button class="btn ghost" type="button" data-ibact="dismiss">무시</button><button class="btn primary" type="button" data-ibact="save">${rel?"확인 · 저장":"그래도 저장"}</button></div>
   </div>`;
 }
 // 같은 사람의 통화·카톡·문자를 한 장으로 묶기 (전화번호 뒤 8자리나 이름이 같으면 같은 묶음)
@@ -2600,7 +2601,7 @@ function ibGroupHTML(g){
       <div class="pc-fld"><label>다음 연락일</label><input type="date" data-ib="next" value="${esc(v.next||"")}"></div>
       <div class="pc-fld" style="grid-column:1/-1"><label>다음에 할 일 (한 줄)</label><input data-ib="act" maxlength="40" value="${esc(v.act||"")}" placeholder="예: 중고차 시세 확인 후 연락"></div>
     </div>
-    <div class="ib-btns"><button class="btn ghost" type="button" data-ibact="dismiss">모두 무시</button><button class="btn primary" type="button" data-ibact="save">${g.length}건 한 번에 저장</button></div>
+    <div class="ib-btns"><button class="btn ghost" type="button" data-ibact="block" title="이 사람의 통화·카톡·문자는 앞으로 분석하지 않아요">🚫 앞으로 제외</button><button class="btn ghost" type="button" data-ibact="dismiss">모두 무시</button><button class="btn primary" type="button" data-ibact="save">${g.length}건 한 번에 저장</button></div>
   </div>`;
 }
 // 묶음 저장: 오래된 상담부터 차례로 같은 고객에 기록. 새 고객이면 첫 건으로 등록하고 나머지는 거기에 덧붙임
@@ -2638,6 +2639,7 @@ function ibRender(force){
     <div class="pc-items">${ibGroups(rel.filter(r=>r.status==="pending")).map(ibGroupHTML).join("")}${rel.filter(r=>r.status!=="pending").map(ibCardHTML).join("")}</div>
     ${ibState==="on"&&!rel.length?`<p class="pc-empty">확인할 상담이 없어요. 통화가 끝나거나 카톡·문자를 캡처하면 잠시 뒤 정리돼요.</p>`:""}
     ${off.length?`<details class="ib-raw"><summary>관련 없어 보이는 것 ${off.length}건</summary><div class="pc-items" style="margin-top:8px">${off.map(ibCardHTML).join("")}</div></details>`:""}
+    ${ibBlocks.length?`<details class="ib-raw"><summary>🚫 제외한 사람 ${ibBlocks.length}명 (통화·카톡·문자를 분석하지 않음)</summary><div class="pc-items" style="margin-top:8px">${ibBlocks.map(x=>`<div class="ib-card off" style="flex-direction:row;align-items:center;justify-content:space-between"><b>${esc(x.value)}</b><button class="btn" type="button" data-ibunblock="${esc(x.id)}">제외 풀기</button></div>`).join("")}</div></details>`:""}
     ${ibRecent.length?`<details class="ib-raw"><summary>✅ 자동으로 저장한 상담 ${ibRecent.length}건 (최근 3일)</summary><div class="pc-items" style="margin-top:8px">${ibRecent.map(x=>`<div class="ib-card off"><div class="ib-top"><span class="ib-kind">${IB_KIND[x.kind]||x.kind}</span><span class="ib-when">${esc(ibWhen(x))}</span><b>${esc(x.contact_name||"")}</b></div>${x.summary?`<p class="ib-sum">${esc(x.summary)}</p>`:""}${x.saved_to?`<span class="ib-next">→ ${esc(x.saved_to)}</span>`:""}</div>`).join("")}</div></details>`:""}`;
   sheet.scrollTop=scroll;
   $("ibClose").onclick=()=>pClose();
@@ -2711,6 +2713,19 @@ async function ibSave(r,card,vals){
   gSyncProspect(nid,data,""); ibLastTarget="p:"+nid;
   return `${name}님을 가망 고객으로 등록했어요${next?" · 다음 연락 "+pshort(next):""}`;
 }
+// 제외 기준: 번호가 있으면 번호, 없으면 폰에 저장된 이름(통화) → 분석된 이름
+function ibBlockValue(rows){
+  for(const r of rows){ const d=ibDigits(r.phone||(r.analysis||{}).phone); if(d.length>=9) return d; }
+  for(const r of rows){ if(r.kind==="call"&&r.contact_name) return String(r.contact_name).trim(); }
+  for(const r of rows){ const n=String((r.analysis||{}).customer_name||r.contact_name||"").trim(); if(n.length>=2) return n; }
+  return "";
+}
+document.addEventListener("click",async e=>{
+  const u=e.target.closest("[data-ibunblock]"); if(!u) return;
+  u.disabled=true;
+  try{ const id=u.dataset.ibunblock; if(id) await sbSql(`delete from public.inbox_block where id=${sqlq(id)}`); toast("제외를 풀었어요. 다음 통화부터 다시 분석해요"); await ibLoad(); }
+  catch(err){ u.disabled=false; toast("처리하지 못했어요"); }
+});
 document.addEventListener("click",async e=>{
   const b=e.target.closest("[data-ibact]"); if(!b) return;
   const card=b.closest("[data-ibid]"), id=card&&card.dataset.ibid, r=ibRows.find(x=>x.id===id); if(!r) return;
@@ -2718,6 +2733,14 @@ document.addEventListener("click",async e=>{
   card.querySelectorAll("button").forEach(x=>x.disabled=true);
   const grp=card.dataset.ibgroup?card.dataset.ibgroup.split(",").map(x=>ibRows.find(y=>y.id===x)).filter(Boolean):null;
   try{
+    if(act==="block"){
+      const rows=grp&&grp.length?grp:[r], val=ibBlockValue(rows);
+      if(!val){ toast("이름이나 번호를 알 수 없어 제외할 수 없어요. 무시를 눌러 주세요"); card.querySelectorAll("button").forEach(x=>x.disabled=false); return; }
+      await sbSql(`insert into public.inbox_block(value) values (${sqlq(val)}) on conflict (value) do nothing`);
+      for(const x of rows) await ibMark(x.id,"dismissed");
+      ibBlocks=[{id:"",value:val}].concat(ibBlocks.filter(x=>x.value!==val));
+      toast(`"${val}"은(는) 앞으로 분석하지 않아요`); ibRender(true); ibLoad(); return;
+    }
     if(grp&&grp.length>1){
       if(act==="dismiss"){ for(const x of grp) await ibMark(x.id,"dismissed"); toast(`${grp.length}건을 무시했어요`); }
       else if(act==="save"){ toast(await ibSaveGroup(grp,card)); if(ibAutoOn) await ibAutoRun(); }

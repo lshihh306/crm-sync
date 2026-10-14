@@ -65,7 +65,7 @@ async function transcribe(file: Blob, fileName: string): Promise<string> {
 const SYSTEM = `너는 현대자동차 영업사원의 상담 기록 비서다. 통화 녹취, 카카오톡 대화 캡처, 문자 캡처, 메모를 읽고 영업 관리용으로 정리한다.
 반드시 아래 JSON 하나만 출력한다. 설명, 코드블록 금지.
 {
- "relevant": true|false,            // 차량 구매·견적·시승·계약·출고·보험·정비·중고차 등 자동차 영업/고객관리 관련이면 true. 가족·지인 사적 대화, 광고, 스팸, 차와 무관한 내용이면 false
+ "relevant": true|false,            // 아래 "relevant 판단 기준"대로
  "category": "가망"|"출고고객"|"개인일정"|"기타",
  "customer_name": string|null,      // 고객 이름. 모르면 null
  "phone": string|null,              // 숫자만
@@ -81,6 +81,8 @@ const SYSTEM = `너는 현대자동차 영업사원의 상담 기록 비서다. 
  "temperature": "상"|"중"|"하"|null, // 구매 가능성
  "confidence": number                // 0~1, 고객/내용 파악 확신도
 }
+relevant 판단 기준: 고객(또는 고객이 될 사람)과 차량 구매·견적·시승·계약·출고·보험·사후관리를 이야기한 경우만 true.
+다음은 false: 영업소·지점·회사 동료와의 내부 업무 연락, 캐피탈·보험·탁송·용품·정비 등 협력업체 직원과의 업무 통화, 가족·친구·지인과의 사적 대화(차 이야기가 잠깐 나와도 구매 상담이 아니면), 광고·스팸·택배·기타 생활 연락.
 규칙: 추측으로 날짜를 만들지 말 것. "내일", "다음 주 화요일" 같은 표현은 기준 시각으로 실제 날짜를 계산한다. 할인 금액 등 숫자는 원문에 있는 그대로만 적는다.`;
 
 async function analyze(parts: { text?: string; image?: { b64: string; type: string } }, meta: string) {
@@ -109,6 +111,21 @@ async function analyze(parts: { text?: string; image?: { b64: string; type: stri
     return { ...parsed, _model: model };
   }
   throw new Error("Claude 분석 실패 - " + lastErr);
+}
+
+// "앞으로 제외" 목록: 번호(뒤 8자리) 또는 이름(띄어쓰기 무시, 포함되면 제외)
+async function isBlocked(name: string | null | undefined, phone: string | null | undefined) {
+  const { data } = await db.from("inbox_block").select("value");
+  if (!data || !data.length) return false;
+  const ph = String(phone ?? "").replace(/[^0-9]/g, "");
+  const nm = String(name ?? "").replace(/\s/g, "");
+  return data.some(({ value }) => {
+    const v = String(value);
+    const vd = v.replace(/[^0-9]/g, "");
+    if (vd.length >= 9 && vd.length === v.replace(/[\s-]/g, "").length) return ph.length >= 8 && ph.slice(-8) === vd.slice(-8);
+    const vn = v.replace(/\s/g, "");
+    return vn.length >= 2 && nm.length >= 2 && nm.includes(vn);
+  });
 }
 
 function b64(buf: ArrayBuffer) {
@@ -140,6 +157,7 @@ async function handle(id: string, kind: string, file: Blob | null, fileName: str
       result = await analyze({ text }, meta);
     }
     // 차량 관련이 아니면: 녹음·캡처 파일과 내용을 바로 지우고 기록만 '정리됨'으로 남김 (사적 대화 보관 안 함)
+    if (result && result.relevant !== false && (await isBlocked(info.name, info.phone) || await isBlocked(result.customer_name, result.phone))) result.relevant = false;
     if (result && result.relevant === false) {
       if (storagePath) await db.storage.from("uploads").remove([storagePath]);
       await db.from("inbox").update({
@@ -227,6 +245,13 @@ Deno.serve(async (req) => {
         await db.from("inbox").delete().eq("id", dup[0].id);
       } else return json({ ok: true, id: dup[0].id, duplicate: true });
     }
+  }
+
+  // 제외 목록에 있는 사람이면 파일을 저장하지도, 분석하지도 않음 (중복 방지용 기록만)
+  if (await isBlocked(info.name, info.phone)) {
+    await db.from("inbox").insert({ kind, file_name: fileName || null, occurred_at: occurredAt, status: "dismissed",
+      analysis: { relevant: false, category: "제외" }, processed_at: new Date().toISOString(), handled_at: new Date().toISOString() });
+    return json({ ok: true, blocked: true });
   }
 
   let storagePath: string | null = null;
