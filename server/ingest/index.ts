@@ -179,6 +179,14 @@ Deno.serve(async (req) => {
     return json({ ok: true, purged: rows?.length ?? 0, files: paths.length });
   }
   // 재처리: POST ?retry=<id>
+  // 상담 입력함에서 "무시/지우기" 하면 녹음·캡처 파일과 원문은 지우고 기록(중복 방지용)만 남김 (POST ?discard=<id>)
+  const discard = url.searchParams.get("discard");
+  if (discard) {
+    const { data: row } = await db.from("inbox").select("storage_path").eq("id", discard).eq("status", "dismissed").maybeSingle();
+    if (row?.storage_path) await db.storage.from("uploads").remove([row.storage_path]);
+    await db.from("inbox").update({ storage_path: null, transcript: null }).eq("id", discard).eq("status", "dismissed");
+    return json({ ok: true, discarded: discard });
+  }
   const retry = url.searchParams.get("retry");
   if (retry) {
     const { data: row } = await db.from("inbox").select("*").eq("id", retry).single();

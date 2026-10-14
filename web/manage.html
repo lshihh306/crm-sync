@@ -2649,6 +2649,7 @@ function ibOpen(){ pOpenSheet(`<p class="ib-state">불러오는 중…</p>`,"inb
 $("inboxBtn").onclick=ibOpen;
 async function ibMark(id,status){
   await sbSql(`update public.inbox set status=${sqlq(status)}, handled_at=now() where id=${sqlq(id)} returning id`);
+  if(status==="dismissed") sbSql(`select public.discard_inbox(${sqlq(id)}) as rid`).catch(()=>{}); // 무시한 상담의 녹음·캡처 파일은 서버에서 지움
   ibRows=ibRows.filter(x=>x.id!==id); ibBadge(); renderAlertBar();
 }
 let ibLastTarget="";
