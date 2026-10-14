@@ -74,7 +74,7 @@ object Scanner {
                 val mime = c.getString(5) ?: "audio/mp4"
                 val size = c.getLong(6)
                 // 녹음 파일이 아직 쓰이는 중일 수 있으니 수정된 지 30초 안 된 건 다음 차례에
-                if (now - modified < 30 || size <= 0) { prefs.sinceAudio = newSince; return true }
+                if (now - modified < 30 || size <= 0) { prefs.sinceAudio = newSince; Sched.soon(ctx, 40, "scan-later"); return true }
                 val key = "a:$id:$name"
                 if (!prefs.isSent(key)) {
                     // 갤럭시 녹음(3GP)을 표준 m4a로 변환해서 보냄. 변환이 안 되면 원본 그대로
@@ -145,6 +145,7 @@ object Sched {
     private val net = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
     fun start(ctx: Context) {
+        WatchService.start(ctx)
         val periodic = PeriodicWorkRequestBuilder<ScanWorker>(Duration.ofMinutes(15))
             .setConstraints(net).build()
         WorkManager.getInstance(ctx).enqueueUniquePeriodicWork("scan-periodic", ExistingPeriodicWorkPolicy.KEEP, periodic)
@@ -167,6 +168,13 @@ object Sched {
             .build()
         val req = OneTimeWorkRequestBuilder<ScanWorker>().setConstraints(c).addTag(TAG_TRIGGER).build()
         WorkManager.getInstance(ctx).enqueueUniqueWork("scan-trigger", policy, req)
+    }
+
+    /** n초 뒤에 한 번 확인 (여러 번 불리면 마지막 것만) */
+    fun soon(ctx: Context, sec: Long, name: String = "scan-soon") {
+        val req = OneTimeWorkRequestBuilder<ScanWorker>().setConstraints(wifiConstraints(ctx))
+            .setInitialDelay(Duration.ofSeconds(sec)).build()
+        WorkManager.getInstance(ctx).enqueueUniqueWork(name, ExistingWorkPolicy.REPLACE, req)
     }
 
     fun runNow(ctx: Context) {
