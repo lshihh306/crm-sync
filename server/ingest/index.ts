@@ -211,10 +211,10 @@ Deno.serve(async (req) => {
 
   // 같은 파일 중복 전송 방지
   if (fileName) {
-    const { data: dup } = await db.from("inbox").select("id, status, storage_path").eq("file_name", fileName).limit(1);
+    const { data: dup } = await db.from("inbox").select("id, status, storage_path, error").eq("file_name", fileName).limit(1);
     if (dup && dup.length) {
       // 예전에 실패한 건 지우고 새로 받음 (앱 업데이트 후 다시 보내기)
-      if (dup[0].status === "error") {
+      if (dup[0].status === "error" || dup[0].error) {
         if (dup[0].storage_path) await db.storage.from("uploads").remove([dup[0].storage_path]);
         await db.from("inbox").delete().eq("id", dup[0].id);
       } else return json({ ok: true, id: dup[0].id, duplicate: true });

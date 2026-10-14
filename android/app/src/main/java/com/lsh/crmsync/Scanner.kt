@@ -75,10 +75,14 @@ object Scanner {
                 val size = c.getLong(6)
                 // 녹음 파일이 아직 쓰이는 중일 수 있으니 수정된 지 30초 안 된 건 다음 차례에
                 if (now - modified < 30 || size <= 0) { prefs.sinceAudio = newSince; Sched.soon(ctx, 40, "scan-later"); return true }
-                val key = "a:$id:$name"
+                val src = ContentUris.withAppendedId(audioUri, id)
+                // 통화 중에는 녹음 파일이 계속 커지는 중 → 실제 파일의 마지막 수정 시각으로 확인해서
+                // 통화가 끝나고 30초가 지난 파일만 보냄 (통화 중 반쪽짜리 파일을 보내지 않도록)
+                val st = realStat(ctx, src)
+                if (st == null || now - st.first < 30 || (now - st.first < 600 && unfinished(ctx, src))) { prefs.sinceAudio = newSince; Sched.soon(ctx, 40, "scan-later"); return true }
+                val key = "a:$id:$name:${st.second}"
                 if (!prefs.isSent(key)) {
                     // 갤럭시 녹음(3GP)을 표준 m4a로 변환해서 보냄. 변환이 안 되면 원본 그대로
-                    val src = ContentUris.withAppendedId(audioUri, id)
                     val tmp = java.io.File(ctx.cacheDir, "call_upload.m4a")
                     val conv = AudioConverter.toM4a(ctx, src, tmp)
                     val r = if (conv != null) Uploader.sendFile(ctx, android.net.Uri.fromFile(conv), name, "audio/mp4", "call", isoKst(modified))
@@ -94,6 +98,28 @@ object Scanner {
         prefs.sinceAudio = newSince
         return true
     }
+
+    /** 실제 파일의 (마지막 수정 시각 초, 크기) */
+    private fun realStat(ctx: Context, uri: Uri): Pair<Long, Long>? = try {
+        ctx.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+            val s = android.system.Os.fstat(pfd.fileDescriptor)
+            Pair(s.st_mtime, s.st_size)
+        }
+    } catch (e: Exception) { null }
+
+    /** 갤럭시 녹음기는 통화가 끝날 때 파일 앞부분의 크기 칸("????????")을 실제 값으로 채움 → 아직 그대로면 녹음 중 */
+    private fun unfinished(ctx: Context, uri: Uri): Boolean = try {
+        val head = ctx.contentResolver.openInputStream(uri)?.use { ins -> ByteArray(64).let { b -> val n = ins.read(b); if (n > 0) b.copyOf(n) else ByteArray(0) } } ?: ByteArray(0)
+        var res = false
+        for (i in 4..head.size - 12) {
+            if (head[i] == 'm'.code.toByte() && head[i + 1] == 'd'.code.toByte() && head[i + 2] == 'a'.code.toByte() && head[i + 3] == 't'.code.toByte()) {
+                val big = head[i - 4] == 0.toByte() && head[i - 3] == 0.toByte() && head[i - 2] == 0.toByte() && head[i - 1] == 1.toByte()
+                res = big && (0 until 8).all { head[i + 4 + it] == 0x3f.toByte() }
+                break
+            }
+        }
+        res
+    } catch (e: Exception) { false }
 
     private fun scanShots(ctx: Context, prefs: Prefs): Boolean {
         val since = prefs.sinceImage
