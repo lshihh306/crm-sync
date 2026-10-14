@@ -18,7 +18,12 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
+      # ubuntu-latest 러너에는 Android SDK가 이미 설치돼 있음 (ANDROID_HOME)
+      - name: Android SDK 확인
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          ls "$ANDROID_HOME/platforms" || true
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
