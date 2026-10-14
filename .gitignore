@@ -4,3 +4,4 @@ android/app/build/
 android/local.properties
 *.iml
 .idea/
+crmsync.apk
