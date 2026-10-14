@@ -93,7 +93,7 @@ async function analyze(parts: { text?: string; image?: { b64: string; type: stri
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model, max_tokens: 1500, system: SYSTEM, messages: [{ role: "user", content }] }),
+      body: JSON.stringify({ model, max_tokens: 4000, system: SYSTEM, messages: [{ role: "user", content }] }),
     });
     if (!r.ok) {
       lastErr = `${model}: ${r.status} ${(await r.text()).slice(0, 300)}`;
