@@ -414,6 +414,8 @@ label.full{grid-column:1/-1}
 .ib-raw summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--accent)}
 .ib-raw pre{margin:6px 0 0;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--sans);font-size:12.5px;line-height:1.5;max-height:260px;overflow:auto}
 .ib-state{font-size:12.5px;color:var(--muted);text-align:center;margin:0}
+.ib-part{border-left:3px solid var(--accent-soft);padding:2px 0 2px 10px;display:grid;gap:4px}
+.ib-part .ib-top{font-size:12.5px}
 .ib-dup{background:var(--warn-soft);color:var(--fg);border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.55}
 .ib-dup b:first-child{color:var(--warn)}
 .ib-dup ul{margin:6px 0 0;padding-left:18px}
@@ -2392,8 +2394,10 @@ function ibErrText(err){
     : c==="tool_error" ? "서버 오류: "+String(err.message||"").slice(0,80)
     : "서버에 잠시 연결되지 않아요";
 }
-const ibLocalDate=r=>{ const v=r.occurred_at||r.created_at; if(!v) return todayStr(); const d=new Date(String(v).replace(" ","T")); return isNaN(d)?todayStr():pymd(d); };
-const ibWhen=r=>{ const v=r.occurred_at||r.created_at; const d=new Date(String(v||"").replace(" ","T")); return isNaN(d)?"":`${d.getMonth()+1}.${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+// 서버 시각 "2026-10-14 04:38:27+00" → 브라우저가 읽을 수 있게 "+00:00"으로
+const ibTime=v=>new Date(String(v||"").replace(" ","T").replace(/([+-]\d\d)$/,"$1:00"));
+const ibLocalDate=r=>{ const v=r.occurred_at||r.created_at; if(!v) return todayStr(); const d=ibTime(v); return isNaN(d)?todayStr():pymd(d); };
+const ibWhen=r=>{ const v=r.occurred_at||r.created_at; const d=ibTime(v); return isNaN(d)?"":`${d.getMonth()+1}.${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const ibRelevant=r=>!(r.analysis&&r.analysis.relevant===false);
 // 잔액이 떨어지면 분석 오류 메시지로 알 수 있음 → 오늘 해야 할 일에 빨간 알림
 function ibLowCredit(){
@@ -2509,7 +2513,7 @@ function ibCardHTML(r){
   const head=`<div class="ib-top"><span class="ib-kind">${kind}</span><span class="ib-when">${esc(when)}</span><b>${who}</b>${r.phone?`<span class="ib-when">${esc(r.phone)}</span>`:""}</div>`;
   const raw=r.transcript?`<details class="ib-raw"><summary>${r.kind==="call"?"🎙 통화 내용 전체":"원문 보기"}</summary><pre>${esc(r.transcript)}</pre></details>`:"";
   if(r.status==="processing"){
-    const old=Date.now()-new Date(String(r.created_at).replace(" ","T"))>5*60000;
+    const old=Date.now()-ibTime(r.created_at)>5*60000;
     return `<div class="ib-card off" data-ibid="${esc(r.id)}">${head}<p class="ib-state">${old?"분석이 멈춘 것 같아요.":"⏳ Claude가 분석하는 중이에요…"}</p>${old?`<div class="ib-btns"><button class="btn" type="button" data-ibact="dismiss">지우기</button><button class="btn primary" type="button" data-ibact="retry">다시 분석</button></div>`:""}</div>`;
   }
   if(r.status==="error") return `<div class="ib-card err" data-ibid="${esc(r.id)}">${head}<p class="ib-sum" style="color:var(--danger)">${/credit balance|insufficient_quota|quota|billing/i.test(r.error||"")?`💳 ${/음성 변환/.test(r.error||"")?"OpenAI":"Claude API"} 잔액이 부족해서 분석하지 못했어요. 충전한 뒤 <b>다시 분석</b>을 눌러 주세요.`:"분석하지 못했어요: "+esc(String(r.error||"").slice(0,160))}</p>${raw}<div class="ib-btns"><button class="btn" type="button" data-ibact="dismiss">지우기</button><button class="btn primary" type="button" data-ibact="retry">다시 분석</button></div></div>`;
@@ -2537,6 +2541,70 @@ function ibCardHTML(r){
     <div class="ib-btns"><button class="btn ghost" type="button" data-ibact="dismiss">무시</button><button class="btn primary" type="button" data-ibact="save">${rel?"확인 · 저장":"그래도 저장"}</button></div>
   </div>`;
 }
+// 같은 사람의 통화·카톡·문자를 한 장으로 묶기 (전화번호 뒤 8자리나 이름이 같으면 같은 묶음)
+function ibGroups(list){
+  const par=list.map((_,i)=>i), f=i=>par[i]===i?i:(par[i]=f(par[i]));
+  const ph=r=>{const d=ibDigits(r.phone||(r.analysis||{}).phone);return d.length>=9?d.slice(-8):""};
+  for(let i=0;i<list.length;i++) for(let j=0;j<i;j++){
+    const a=list[i], b=list[j], pa=ph(a), pb=ph(b);
+    const same=(pa&&pb)?pa===pb:ibNames(a).some(x=>ibNames(b).some(y=>ibSameName(x,y)));
+    if(same) par[f(i)]=f(j);
+  }
+  const m=new Map(); list.forEach((r,i)=>{const k=f(i); if(!m.has(k)) m.set(k,[]); m.get(k).push(r);});
+  return [...m.values()].map(g=>g.sort((a,b)=>String(a.occurred_at||a.created_at).localeCompare(String(b.occurred_at||b.created_at))));
+}
+// 묶음 전체에서 고를 기본값: 이름·차종은 있는 것, 다음 연락은 가장 최근 상담 기준
+function ibGroupVals(g){
+  const pick=f=>{ for(let i=g.length-1;i>=0;i--){ const v=f(g[i].analysis||{},g[i]); if(v) return v; } return ""; };
+  const sure=g.find(ibSure);
+  return { target: sure?ibDefaultTarget(sure):ibDefaultTarget(g[g.length-1]),
+    name: pick((a,r)=>String(a.customer_name||r.contact_name||"").trim()), car: pick(a=>a.car),
+    stage: pick(a=>PSTAGES.includes(a.stage)?a.stage:""), next: pick(a=>/^\d{4}-\d{2}-\d{2}$/.test(a.next_date||"")?a.next_date:""),
+    act: pick(a=>String(a.next_action||"").trim().slice(0,40)), pay: pick(a=>a.payment), temp: pick(a=>a.temperature) };
+}
+function ibGroupHTML(g){
+  if(g.length===1) return ibCardHTML(g[0]);
+  const v=ibGroupVals(g), last=g[g.length-1];
+  const kinds=[...new Set(g.map(r=>IB_KIND[r.kind]||r.kind))];
+  const phone=(g.find(r=>r.phone)||{}).phone||"";
+  const head=`<div class="ib-top">${kinds.map(k=>`<span class="ib-kind">${k}</span>`).join("")}<b>${esc(v.name||phone)}</b>${phone?`<span class="ib-when">${esc(phone)}</span>`:""}<span class="ib-when">상담 ${g.length}건</span></div>`;
+  const dup=(()=>{ if(g.some(ibSure)) return ""; const seen=new Set(), cs=[]; g.forEach(r=>ibNameCandidates(r).forEach(x=>{const k=x.kind+x.c.id; if(!seen.has(k)){seen.add(k);cs.push(x);}})); if(!cs.length) return "";
+    return `<div class="ib-dup"><b>⚠️ 같은 이름의 고객이 ${cs.length}명 있어요.</b> 같은 사람이면 아래 "어디에 넣을까요"에서 그 고객을, 다른 사람이면 "새 가망 고객으로 등록"을 고르세요.<ul>${cs.map(({c,kind})=>`<li>${kind==="p"?"가망":"출고"} · <b>${esc(c.name||"")}</b>${(kind==="p"?c.car:c.model)?" · "+esc(kind==="p"?c.car:c.model):""}${kind==="p"&&c.stage?" · "+esc(c.stage):""}${c.phone?" · ☎ "+esc(String(c.phone).slice(-4)):""}${kind==="p"&&c.lastContact?" · 마지막 연락 "+esc(fmt(c.lastContact).slice(5)):""}</li>`).join("")}</ul></div>`; })();
+  const parts=g.map(r=>{ const a=r.analysis||{}, det=(Array.isArray(a.details)?a.details:[]).filter(Boolean);
+    return `<div class="ib-part"><div class="ib-top"><span class="ib-kind">${IB_KIND[r.kind]||r.kind}</span><span class="ib-when">${esc(ibWhen(r))}</span></div>
+      ${a.summary?`<p class="ib-sum">${esc(a.summary)}</p>`:""}${det.length?`<ul class="ib-det">${det.map(d=>`<li>${esc(d)}</li>`).join("")}</ul>`:""}
+      ${r.transcript?`<details class="ib-raw"><summary>${r.kind==="call"?"🎙 통화 내용 전체":"원문 보기"}</summary><pre>${esc(r.transcript)}</pre></details>`:""}</div>`; }).join("");
+  const la=last.analysis||{}, nextTxt=[v.next?pshort(v.next):"", la.next_time||"", v.act].filter(Boolean).join(" · ");
+  const info=[v.car,v.pay,v.temp?"구매 가능성 "+v.temp:""].filter(Boolean).join(" · ");
+  return `<div class="ib-card" data-ibid="${esc(last.id)}" data-ibgroup="${esc(g.map(r=>r.id).join(","))}">${head}${dup}${parts}
+    ${nextTxt?`<span class="ib-next">→ ${esc(nextTxt)}</span>`:""}${info?`<span class="ib-match">${esc(info)}</span>`:""}
+    <div class="ib-edit">
+      <div class="pc-fld" style="grid-column:1/-1"><label>어디에 넣을까요 (${g.length}건 한 번에)</label><select data-ib="target">${ibTargetOptions(v.target)}</select></div>
+      <div class="pc-fld"><label>고객 이름</label><input data-ib="name" value="${esc(v.name)}" placeholder="이름"></div>
+      <div class="pc-fld"><label>관심 차종</label><input data-ib="car" value="${esc(v.car||"")}" placeholder="차종"></div>
+      <div class="pc-fld"><label>진행 단계</label><select data-ib="stage"><option value="">그대로</option>${PSTAGES.map(s=>`<option${s===v.stage?" selected":""}>${s}</option>`).join("")}</select></div>
+      <div class="pc-fld"><label>다음 연락일</label><input type="date" data-ib="next" value="${esc(v.next||"")}"></div>
+      <div class="pc-fld" style="grid-column:1/-1"><label>다음에 할 일 (한 줄)</label><input data-ib="act" maxlength="40" value="${esc(v.act||"")}" placeholder="예: 중고차 시세 확인 후 연락"></div>
+    </div>
+    <div class="ib-btns"><button class="btn ghost" type="button" data-ibact="dismiss">모두 무시</button><button class="btn primary" type="button" data-ibact="save">${g.length}건 한 번에 저장</button></div>
+  </div>`;
+}
+// 묶음 저장: 오래된 상담부터 차례로 같은 고객에 기록. 새 고객이면 첫 건으로 등록하고 나머지는 거기에 덧붙임
+async function ibSaveGroup(g,card){
+  const val=k=>{const el=card.querySelector(`[data-ib="${k}"]`);return el?el.value.trim():""};
+  const base={target:val("target"),name:val("name"),car:val("car"),stage:val("stage"),next:val("next"),act:val("act")};
+  let target=base.target, firstMsg="", t="";
+  if(target==="ev"){ firstMsg=await ibSave(g[g.length-1],null,base); t=ibLastTarget; }
+  else for(let i=0;i<g.length;i++){
+    const lastOne=i===g.length-1;
+    const msg=await ibSave(g[i],null,Object.assign({},base,{target, next:lastOne?base.next:"", act:lastOne?base.act:"", stage:lastOne?base.stage:""}));
+    if(!firstMsg) firstMsg=msg; t=ibLastTarget; target=ibLastTarget.startsWith("e:")?target:ibLastTarget; // 새로 만든 고객에 나머지를 붙임
+  }
+  const p=t.startsWith("p:")?prospects.find(x=>x.id===t.slice(2)):null, c=t.startsWith("c:")?all.find(x=>x.id===t.slice(2)):null;
+  const msg=t.startsWith("e:")?firstMsg:`${(p||c||{}).name||base.name||"고객"}님 기록에 상담 ${g.length}건을 한 번에 넣었어요${base.next?" · 다음 연락 "+pshort(base.next):""}`;
+  for(const r of g){ await ibMark(r.id,"approved"); sbSql(`update public.inbox set saved_to=${sqlq(msg)}, saved_target=${sqlq(t)} where id=${sqlq(r.id)}`).catch(()=>{}); }
+  return msg;
+}
 function ibRender(force){
   if(pKind!=="inbox") return;
   const sheet=pq(".pc-sheet"); if(!sheet) return;
@@ -2549,7 +2617,7 @@ function ibRender(force){
     <label class="seg" style="flex-direction:row;align-items:center;gap:8px;font-size:14px;color:var(--fg)"><input type="checkbox" id="ibAuto" style="width:auto"${ibAutoOn?" checked":""}> 확실한 상담은 자동 저장</label>
     ${ibState==="warn"?`<div class="notice">${esc(ibMsg)} <button class="btn" type="button" id="ibRetryConn" style="margin-left:6px">다시 시도</button></div>`:""}
     ${ibState==="wait"?`<p class="ib-state">불러오는 중…</p>`:""}
-    <div class="pc-items">${rel.map(ibCardHTML).join("")}</div>
+    <div class="pc-items">${ibGroups(rel.filter(r=>r.status==="pending")).map(ibGroupHTML).join("")}${rel.filter(r=>r.status!=="pending").map(ibCardHTML).join("")}</div>
     ${ibState==="on"&&!rel.length?`<p class="pc-empty">확인할 상담이 없어요. 통화가 끝나거나 카톡·문자를 캡처하면 잠시 뒤 정리돼요.</p>`:""}
     ${off.length?`<details class="ib-raw"><summary>관련 없어 보이는 것 ${off.length}건</summary><div class="pc-items" style="margin-top:8px">${off.map(ibCardHTML).join("")}</div></details>`:""}
     ${ibRecent.length?`<details class="ib-raw"><summary>✅ 자동으로 저장한 상담 ${ibRecent.length}건 (최근 3일)</summary><div class="pc-items" style="margin-top:8px">${ibRecent.map(x=>`<div class="ib-card off"><div class="ib-top"><span class="ib-kind">${IB_KIND[x.kind]||x.kind}</span><span class="ib-when">${esc(ibWhen(x))}</span><b>${esc(x.contact_name||"")}</b></div>${x.summary?`<p class="ib-sum">${esc(x.summary)}</p>`:""}${x.saved_to?`<span class="ib-next">→ ${esc(x.saved_to)}</span>`:""}</div>`).join("")}</div></details>`:""}`;
@@ -2626,7 +2694,13 @@ document.addEventListener("click",async e=>{
   const card=b.closest("[data-ibid]"), id=card&&card.dataset.ibid, r=ibRows.find(x=>x.id===id); if(!r) return;
   const act=b.dataset.ibact;
   card.querySelectorAll("button").forEach(x=>x.disabled=true);
+  const grp=card.dataset.ibgroup?card.dataset.ibgroup.split(",").map(x=>ibRows.find(y=>y.id===x)).filter(Boolean):null;
   try{
+    if(grp&&grp.length>1){
+      if(act==="dismiss"){ for(const x of grp) await ibMark(x.id,"dismissed"); toast(`${grp.length}건을 무시했어요`); }
+      else if(act==="save"){ toast(await ibSaveGroup(grp,card)); if(ibAutoOn) await ibAutoRun(); }
+      ibRender(true); return;
+    }
     if(act==="dismiss"){ await ibMark(id,"dismissed"); toast("무시했어요"); }
     else if(act==="retry"){ await sbSql(`select public.retry_inbox(${sqlq(id)}) as rid`); r.status="processing"; r.created_at=new Date().toISOString(); toast("다시 분석을 요청했어요. 잠시 뒤 새로고침하세요"); setTimeout(ibLoad,15000); }
     else if(act==="save"){ const msg=await ibSave(r,card); await ibMark(id,"approved"); sbSql(`update public.inbox set saved_to=${sqlq(msg)}, saved_target=${sqlq(ibLastTarget)} where id=${sqlq(id)}`).catch(()=>{}); toast(msg); if(ibAutoOn) await ibAutoRun(); }
