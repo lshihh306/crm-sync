@@ -60,7 +60,7 @@ async function transcribe(file: Blob, fileName: string): Promise<string> {
 const SYSTEM = `너는 현대자동차 영업사원의 상담 기록 비서다. 통화 녹취, 카카오톡 대화 캡처, 문자 캡처, 메모를 읽고 영업 관리용으로 정리한다.
 반드시 아래 JSON 하나만 출력한다. 설명, 코드블록 금지.
 {
- "relevant": true|false,            // 차량 상담·고객 관리와 관련 있으면 true (광고, 스팸, 가족 잡담이면 false)
+ "relevant": true|false,            // 차량 구매·견적·시승·계약·출고·보험·정비·중고차 등 자동차 영업/고객관리 관련이면 true. 가족·지인 사적 대화, 광고, 스팸, 차와 무관한 내용이면 false
  "category": "가망"|"출고고객"|"개인일정"|"기타",
  "customer_name": string|null,      // 고객 이름. 모르면 null
  "phone": string|null,              // 숫자만
@@ -113,7 +113,7 @@ function b64(buf: ArrayBuffer) {
   return btoa(bin);
 }
 
-async function handle(id: string, kind: string, file: Blob | null, fileName: string, text: string, info: { name: string | null; phone: string | null }) {
+async function handle(id: string, kind: string, file: Blob | null, fileName: string, text: string, info: { name: string | null; phone: string | null }, storagePath: string | null = null) {
   try {
     let transcript = text;
     let result;
@@ -134,6 +134,16 @@ async function handle(id: string, kind: string, file: Blob | null, fileName: str
     } else {
       result = await analyze({ text }, meta);
     }
+    // 차량 관련이 아니면: 녹음·캡처 파일과 내용을 바로 지우고 기록만 '정리됨'으로 남김 (사적 대화 보관 안 함)
+    if (result && result.relevant === false) {
+      if (storagePath) await db.storage.from("uploads").remove([storagePath]);
+      await db.from("inbox").update({
+        analysis: { relevant: false, category: result.category ?? "기타", _model: result._model },
+        transcript: null, phone: null, contact_name: null, storage_path: null,
+        status: "dismissed", processed_at: new Date().toISOString(), handled_at: new Date().toISOString(), error: null,
+      }).eq("id", id);
+      return;
+    }
     await db.from("inbox").update({
       analysis: result,
       transcript,
@@ -144,7 +154,7 @@ async function handle(id: string, kind: string, file: Blob | null, fileName: str
       error: null,
     }).eq("id", id);
   } catch (err) {
-    await db.from("inbox").update({ status: "error", error: String(err?.message ?? err) }).eq("id", id);
+    await db.from("inbox").update({ status: "error", error: String((err as Error)?.message ?? err) }).eq("id", id);
   }
 }
 
@@ -165,7 +175,7 @@ Deno.serve(async (req) => {
       file = data;
     }
     await db.from("inbox").update({ status: "processing", error: null }).eq("id", retry);
-    EdgeRuntime.waitUntil(handle(retry, row.kind, file, row.file_name ?? "", row.transcript ?? "", { name: row.contact_name, phone: row.phone }));
+    EdgeRuntime.waitUntil(handle(retry, row.kind, file, row.file_name ?? "", row.kind === "call" ? "" : (row.transcript ?? ""), { name: row.contact_name, phone: row.phone }, row.storage_path));
     return json({ ok: true, id: retry, retried: true });
   }
 
@@ -205,6 +215,6 @@ Deno.serve(async (req) => {
   }).select("id").single();
   if (error) return json({ error: error.message }, 500);
 
-  EdgeRuntime.waitUntil(handle(row.id, kind, file, fileName, text, info));
+  EdgeRuntime.waitUntil(handle(row.id, kind, file, fileName, text, info, storagePath));
   return json({ ok: true, id: row.id });
 });

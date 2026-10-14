@@ -2359,7 +2359,8 @@ $("csvBtn").onclick=exportExcel;
 
 // ===== 상담 입력함: 갤럭시 '상담 자동전송' 앱 → 서버(Supabase) → Claude 분석 결과를 확인하고 저장 =====
 const SB="Supabase", SB_PROJECT="fyyfeqwthbgetwkayodu";
-let ibRows=[], ibState="wait", ibMsg="", ibBusy=false, ibStarted=false;
+let ibRows=[], ibState="wait", ibMsg="", ibBusy=false, ibStarted=false, ibAutoOn=true, ibRecent=[];
+const IB_AUTO_MIN=0.7; // Claude 확신도가 이 이상이면 확인 없이 자동 저장
 const IB_KIND={call:"📞 통화",kakao:"💛 카톡",sms:"💬 문자",text:"📝 메모",image:"🖼 캡처"};
 const sqlq=v=>v==null?"null":"'"+String(v).replace(/'/g,"''")+"'";
 const ibDigits=s=>String(s||"").replace(/\D/g,"");
@@ -2396,13 +2397,47 @@ async function ibLoad(){
   try{
     ibRows=await sbSql("select id, created_at, kind, file_name, occurred_at, phone, contact_name, transcript, analysis, status, error from public.inbox where status in ('pending','processing','error') order by coalesce(occurred_at, created_at) desc limit 60");
     ibState="on"; ibMsg="";
+    if(ibAutoOn && loaded && ploaded && !poffline) await ibAutoRun();
+    ibRecent=await sbSql("select id, kind, occurred_at, created_at, contact_name, analysis->>'summary' as summary, saved_to from public.inbox where auto_saved and handled_at > now() - interval '3 days' order by handled_at desc limit 20");
   }catch(err){ ibState="warn"; ibMsg=ibErrText(err); }
   finally{ ibBusy=false; }
   ibBadge(); renderAlertBar(); if(pKind==="inbox") ibRender();
 }
+// 확실한 차량 상담은 확인 없이 바로 관리 시스템에 저장 (애매한 것만 입력함에 남김)
+function ibAutoVals(r){
+  const a=r.analysis||{}, target=ibDefaultTarget(r);
+  return {target, name:String(a.customer_name||r.contact_name||"").trim(), car:String(a.car||"").trim(),
+    stage:PSTAGES.includes(a.stage)?a.stage:"", next:/^\d{4}-\d{2}-\d{2}$/.test(a.next_date||"")?a.next_date:"", act:String(a.next_action||"").trim().slice(0,40)};
+}
+function ibAutoOk(r){
+  if(r.status!=="pending"||!ibRelevant(r)) return false;
+  const a=r.analysis||{}; if(!(+a.confidence>=IB_AUTO_MIN)) return false;
+  const v=ibAutoVals(r);
+  if(v.target==="ev") return false;            // 개인 일정은 직접 확인
+  if(v.target==="new" && !v.name) return false; // 누군지 모르면 직접 확인
+  return true;
+}
+async function ibAutoRun(){
+  let n=0;
+  for(const r of ibRows.filter(ibAutoOk)){
+    // 다른 기기에서 열려 있어도 한 번만 저장되게 먼저 '내가 처리'로 표시
+    const got=await sbSql(`update public.inbox set status='approved', auto_saved=true, handled_at=now() where id=${sqlq(r.id)} and status='pending' returning id`);
+    if(!got.length) continue;
+    try{
+      const msg=await ibSave(r,null,ibAutoVals(r));
+      await sbSql(`update public.inbox set saved_to=${sqlq(msg)} where id=${sqlq(r.id)}`);
+      n++;
+    }catch(err){
+      await sbSql(`update public.inbox set status='pending', auto_saved=false, handled_at=null where id=${sqlq(r.id)}`);
+      continue;
+    }
+    ibRows=ibRows.filter(x=>x.id!==r.id);
+  }
+  if(n) toast(`새 상담 ${n}건을 자동으로 정리했어요`);
+}
 function ibStart(){
   if(ibStarted||!gmcp) return; ibStarted=true;
-  ibLoad();
+  ibLoad(); setTimeout(ibLoad,4000); // 고객 목록이 다 불러와진 뒤 한 번 더 (자동 저장 매칭용)
   setInterval(()=>{ if(document.visibilityState==="visible") ibLoad(); },30000);
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") ibLoad(); });
 }
@@ -2480,14 +2515,17 @@ function ibRender(force){
   const rel=list.filter(r=>r.status!=="pending"||ibRelevant(r)), off=list.filter(r=>r.status==="pending"&&!ibRelevant(r));
   const scroll=sheet.scrollTop;
   sheet.innerHTML=`<div class="pc-hd"><h3>📥 상담 입력함 <span style="color:var(--muted);font-size:14px">${ibPendingCount()}건</span></h3><div class="actions"><button class="btn" type="button" id="ibRefresh">새로고침</button><button class="btn ghost" type="button" id="ibClose">닫기</button></div></div>
-    <p class="pc-note">'상담 자동전송' 앱이 보낸 통화 녹음·카톡·문자 캡처를 Claude가 정리했어요. 확인하고 저장하면 가망 고객 연락 기록과 캘린더에 들어가요.</p>
+    <p class="pc-note">차량 관련 상담만 남기고, 사적인 통화·대화는 서버에서 바로 지워요. ${ibAutoOn?"Claude가 확실하다고 본 상담은 <b>자동으로 저장</b>되고, 애매한 것만 여기 남아요.":"자동 저장이 꺼져 있어요. 하나씩 확인하고 저장하세요."}</p>
+    <label class="seg" style="flex-direction:row;align-items:center;gap:8px;font-size:14px;color:var(--fg)"><input type="checkbox" id="ibAuto" style="width:auto"${ibAutoOn?" checked":""}> 확실한 상담은 자동 저장</label>
     ${ibState==="warn"?`<div class="notice">${esc(ibMsg)} <button class="btn" type="button" id="ibRetryConn" style="margin-left:6px">다시 시도</button></div>`:""}
     ${ibState==="wait"?`<p class="ib-state">불러오는 중…</p>`:""}
     <div class="pc-items">${rel.map(ibCardHTML).join("")}</div>
-    ${ibState==="on"&&!rel.length?`<p class="pc-empty">새로 들어온 상담이 없어요. 통화가 끝나거나 카톡·문자를 캡처하면 잠시 뒤 여기에 떠요.</p>`:""}
-    ${off.length?`<details class="ib-raw"><summary>관련 없어 보이는 것 ${off.length}건</summary><div class="pc-items" style="margin-top:8px">${off.map(ibCardHTML).join("")}</div></details>`:""}`;
+    ${ibState==="on"&&!rel.length?`<p class="pc-empty">확인할 상담이 없어요. 통화가 끝나거나 카톡·문자를 캡처하면 잠시 뒤 정리돼요.</p>`:""}
+    ${off.length?`<details class="ib-raw"><summary>관련 없어 보이는 것 ${off.length}건</summary><div class="pc-items" style="margin-top:8px">${off.map(ibCardHTML).join("")}</div></details>`:""}
+    ${ibRecent.length?`<details class="ib-raw"><summary>✅ 자동으로 저장한 상담 ${ibRecent.length}건 (최근 3일)</summary><div class="pc-items" style="margin-top:8px">${ibRecent.map(x=>`<div class="ib-card off"><div class="ib-top"><span class="ib-kind">${IB_KIND[x.kind]||x.kind}</span><span class="ib-when">${esc(ibWhen(x))}</span><b>${esc(x.contact_name||"")}</b></div>${x.summary?`<p class="ib-sum">${esc(x.summary)}</p>`:""}${x.saved_to?`<span class="ib-next">→ ${esc(x.saved_to)}</span>`:""}</div>`).join("")}</div></details>`:""}`;
   sheet.scrollTop=scroll;
   $("ibClose").onclick=()=>pClose();
+  $("ibAuto").onchange=async e=>{ ibAutoOn=e.target.checked; try{ await settingsCol.doc("inbox").set({auto:ibAutoOn, updatedAt:new Date().toISOString()}); }catch(_){} toast(ibAutoOn?"확실한 상담은 자동으로 저장할게요":"자동 저장을 껐어요. 하나씩 확인해서 저장하세요"); ibRender(true); if(ibAutoOn) ibLoad(); };
   $("ibRefresh").onclick=()=>{ ibState="wait"; ibRender(true); ibLoad(); };
   const rc=$("ibRetryConn"); if(rc) rc.onclick=()=>{ ibState="wait"; ibRender(true); ibLoad(); };
 }
@@ -2497,8 +2535,8 @@ async function ibMark(id,status){
   await sbSql(`update public.inbox set status=${sqlq(status)}, handled_at=now() where id=${sqlq(id)} returning id`);
   ibRows=ibRows.filter(x=>x.id!==id); ibBadge(); renderAlertBar();
 }
-async function ibSave(r,card){
-  const a=r.analysis||{}, v=k=>{const el=card.querySelector(`[data-ib="${k}"]`);return el?el.value.trim():""};
+async function ibSave(r,card,vals){
+  const a=r.analysis||{}, v=k=>{ if(vals) return vals[k]||""; const el=card.querySelector(`[data-ib="${k}"]`);return el?el.value.trim():""};
   const target=v("target"), name=v("name"), car=v("car"), stage=v("stage"), next=v("next"), act=v("act");
   const date=ibLocalDate(r), label=(IB_KIND[r.kind]||"").replace(/^\S+\s/,"");
   const det=(Array.isArray(a.details)?a.details:[]).filter(Boolean);
@@ -2552,7 +2590,7 @@ document.addEventListener("click",async e=>{
   try{
     if(act==="dismiss"){ await ibMark(id,"dismissed"); toast("무시했어요"); }
     else if(act==="retry"){ await sbSql(`select public.retry_inbox(${sqlq(id)}) as rid`); r.status="processing"; r.created_at=new Date().toISOString(); toast("다시 분석을 요청했어요. 잠시 뒤 새로고침하세요"); setTimeout(ibLoad,15000); }
-    else if(act==="save"){ const msg=await ibSave(r,card); await ibMark(id,"approved"); toast(msg); }
+    else if(act==="save"){ const msg=await ibSave(r,card); await ibMark(id,"approved"); sbSql(`update public.inbox set saved_to=${sqlq(msg)} where id=${sqlq(id)}`).catch(()=>{}); toast(msg); }
     ibRender(true);
   }catch(err){
     toast(typeof err==="string"?err:(err&&err.code?ibErrText(err):"처리하지 못했어요. 잠시 후 다시 시도해 주세요."));
@@ -2580,6 +2618,7 @@ render();
   db.collection("settings").doc("carnewsMeta").onSnapshot(snap=>{ newsMeta = snap.exists ? snap.data() : null; if(pKind==="news") pOpenNews(); }, ()=>{});
   extraCol = db.collection("extraIncome");
   extraCol.onSnapshot(snap=>{ extras = snap.docs.map(d=>Object.assign({id:d.id},d.data())); renderExtra(); renderProfit(); }, ()=>{});
+  settingsCol.doc("inbox").onSnapshot(snap=>{ const d=snap.exists?snap.data():null; ibAutoOn = !(d && d.auto===false); if(pKind==="inbox") ibRender(); }, ()=>{});
   settingsCol.doc("finance").onSnapshot(snap=>{ finDoc = snap.exists ? snap.data() : null; renderFin(); }, ()=>{});
   ratesCol.onSnapshot(snap=>{ rateDocs={}; snap.docs.forEach(d=>{ rateDocs[d.id]=d.data(); }); renderCalc(); }, ()=>{});
   col.onSnapshot(snap=>{ const docs=snap.docs.map(d=>Object.assign({id:d.id},d.data())); all=docs.filter(r=>!r.canceled); canceledCust=docs.filter(r=>r.canceled); loaded=true; render(); },
