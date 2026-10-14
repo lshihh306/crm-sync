@@ -2421,8 +2421,10 @@ function ibAutoVals(r){
 }
 function ibAutoOk(r){
   if(r.status!=="pending"||!ibRelevant(r)) return false;
-  const a=r.analysis||{}; if(!(+a.confidence>=IB_AUTO_MIN)) return false;
-  const v=ibAutoVals(r);
+  const a=r.analysis||{}, v=ibAutoVals(r);
+  // 이미 있는 고객과 이름·번호가 같으면 확신도와 상관없이 그 고객에 덧붙임
+  if(v.target.startsWith("p:")||v.target.startsWith("c:")) return true;
+  if(!(+a.confidence>=IB_AUTO_MIN)) return false;
   if(v.target==="ev") return false;            // 개인 일정은 직접 확인
   if(v.target==="new" && !v.name) return false; // 누군지 모르면 직접 확인
   return true;
@@ -2452,21 +2454,19 @@ function ibStart(){
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") ibLoad(); });
 }
 // 고객 찾기: 전화번호 뒤 8자리 → 이름 순
-const ibCleanName=s=>String(s||"").replace(/\s|님|고객|대표|사장|선생|\(.*?\)/g,"");
-function ibMatchProspect(r){
+// 이름 비교용: 띄어쓰기·호칭·직함·괄호 빼기 ("비엠 5팀 이민하주임" → "비엠5팀이민하")
+const ibCleanName=s=>String(s||"").replace(/\(.*?\)/g,"").replace(/\s/g,"").replace(/(고객님|고객|님|대표님|대표|사장님|사장|선생님|선생|주임|대리|과장|차장|부장|팀장|실장|이사|사원|매니저|원장|소장)$/g,"").replace(/(고객님|고객|님)$/g,"");
+// 같은 사람인지: 완전히 같거나, 3글자 이상 이름이 다른 쪽 안에 들어 있으면 같은 사람
+const ibSameName=(x,y)=>{ const a=ibCleanName(x), b=ibCleanName(y); if(a.length<2||b.length<2) return false; if(a===b) return true; const [s1,l1]=a.length<=b.length?[a,b]:[b,a]; return s1.length>=3 && l1.includes(s1); };
+const ibNames=r=>{ const a=r.analysis||{}; return [a.customer_name, r.contact_name].filter(Boolean); };
+function ibFindIn(list,r,nameKey){
   const a=r.analysis||{}, ph=ibDigits(r.phone||a.phone);
-  if(ph.length>=9){ const p=prospects.find(c=>{const d=ibDigits(c.phone);return d.length>=8&&d.slice(-8)===ph.slice(-8)}); if(p) return p; }
-  const nm=ibCleanName(r.contact_name||a.customer_name);
-  if(nm.length>=2){ const p=prospects.find(c=>ibCleanName(c.name)===nm); if(p) return p; }
+  if(ph.length>=9){ const x=list.find(c=>{const d=ibDigits(c.phone);return d.length>=8&&d.slice(-8)===ph.slice(-8)}); if(x) return x; }
+  for(const nm of ibNames(r)){ const x=list.find(c=>ibSameName(c[nameKey],nm)); if(x) return x; }
   return null;
 }
-function ibMatchCustomer(r){
-  const a=r.analysis||{}, ph=ibDigits(r.phone||a.phone);
-  if(ph.length>=9){ const c=all.find(x=>{const d=ibDigits(x.phone);return d.length>=8&&d.slice(-8)===ph.slice(-8)}); if(c) return c; }
-  const nm=ibCleanName(r.contact_name||a.customer_name);
-  if(nm.length>=2){ const c=all.find(x=>ibCleanName(x.name)===nm); if(c) return c; }
-  return null;
-}
+const ibMatchProspect=r=>ibFindIn(prospects,r,"name");
+const ibMatchCustomer=r=>ibFindIn(all,r,"name");
 function ibDefaultTarget(r){
   const a=r.analysis||{}, p=ibMatchProspect(r);
   if(p) return "p:"+p.id;
@@ -2578,7 +2578,8 @@ async function ibSave(r,card,vals){
     if(!p.phone&&(r.phone||a.phone)) data.phone=r.phone||a.phone;
     if((!p.pay||p.pay==="미정")&&ibPay(a.payment)!=="미정") data.pay=ibPay(a.payment);
     if(!(await psave(p.id,data,false))) throw "저장하지 못했어요";
-    const merged=Object.assign({},p,data);
+    Object.assign(p,data); // 한 번에 여러 건이 붙을 때 기록이 덮이지 않게
+    const merged=Object.assign({},p);
     if(P_CONTRACT.includes(merged.stage)) pToCustomer(p.id,merged); else if(merged.stage==="해약") pCancelCustomer(p.id,p);
     gSyncProspect(p.id,merged,p.gcalId);
     return `${p.name}님 연락 기록에 넣었어요${next?" · 다음 연락 "+pshort(next):""}`;
@@ -2589,6 +2590,7 @@ async function ibSave(r,card,vals){
   const data={name, phone:r.phone||a.phone||"", car, source:r.kind==="call"?"전화 문의":"기타", stage:stage||"신규 문의", pay:ibPay(a.payment),
     nextDate:next||"", nextAction:act||"", inquiry:String(r.transcript||a.summary||"").slice(0,3000), memo:det.join(" / "), files:[], logs:[entry], lastContact:date};
   if(!(await psave(nid,data,true))) throw "저장하지 못했어요";
+  if(!prospects.some(x=>x.id===nid)) prospects.push(Object.assign({id:nid},data)); // 같은 사람 다음 상담이 바로 여기에 붙도록
   gSyncProspect(nid,data,"");
   return `${name}님을 가망 고객으로 등록했어요${next?" · 다음 연락 "+pshort(next):""}`;
 }
@@ -2600,7 +2602,7 @@ document.addEventListener("click",async e=>{
   try{
     if(act==="dismiss"){ await ibMark(id,"dismissed"); toast("무시했어요"); }
     else if(act==="retry"){ await sbSql(`select public.retry_inbox(${sqlq(id)}) as rid`); r.status="processing"; r.created_at=new Date().toISOString(); toast("다시 분석을 요청했어요. 잠시 뒤 새로고침하세요"); setTimeout(ibLoad,15000); }
-    else if(act==="save"){ const msg=await ibSave(r,card); await ibMark(id,"approved"); sbSql(`update public.inbox set saved_to=${sqlq(msg)} where id=${sqlq(id)}`).catch(()=>{}); toast(msg); }
+    else if(act==="save"){ const msg=await ibSave(r,card); await ibMark(id,"approved"); sbSql(`update public.inbox set saved_to=${sqlq(msg)} where id=${sqlq(id)}`).catch(()=>{}); toast(msg); if(ibAutoOn) await ibAutoRun(); }
     ibRender(true);
   }catch(err){
     toast(typeof err==="string"?err:(err&&err.code?ibErrText(err):"처리하지 못했어요. 잠시 후 다시 시도해 주세요."));
