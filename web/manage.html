@@ -915,7 +915,7 @@ $("delWrap").addEventListener("click",async e=>{
   if(e.target.id==="delBtn"){ $("delWrap").innerHTML=`<span class="confirm">정말 삭제할까요? <button class="btn danger" type="button" id="delYes">삭제</button><button class="btn ghost" type="button" id="delNo">아니요</button></span>`; }
   else if(e.target.id==="delNo"){ $("delWrap").innerHTML=`<button class="btn danger ghost" type="button" id="delBtn">삭제</button>`; }
   else if(e.target.id==="delYes" && editingId){
-    try{ const did=editingId; await col.doc(did).delete(); ibPurge("c:"+did); closeForm(); toast("삭제했어요."); }catch(err){ toast("삭제하지 못했어요. 잠시 후 다시 시도해 주세요."); }
+    try{ const did=editingId, dc=all.find(x=>x.id===did); await col.doc(did).delete(); ibPurge("c:"+did); const ne=await delCustEvents("c:"+did,dc&&dc.name); closeForm(); toast(ne?`삭제했어요. 연결된 일정 ${ne}개도 지웠어요.`:"삭제했어요."); }catch(err){ toast("삭제하지 못했어요. 잠시 후 다시 시도해 주세요."); }
   }
 });
 
@@ -1790,7 +1790,7 @@ function pOpenEdit(id,dateForNew){
   const del=$("pcDel");
   if(del) del.onclick=async()=>{
     if(del.dataset.arm!=="1"){del.dataset.arm="1";del.textContent="한 번 더 누르면 삭제";return}
-    try{await pcol.doc(id).delete();ibPurge("p:"+id);if(c.gcalId)gDel(c.gcalId);await pdrop([...pAllFiles(c),...st.added]);st.added=[];pClose(true);toast("고객을 삭제했어요")}catch(e){toast("삭제하지 못했어요.")}
+    try{await pcol.doc(id).delete();ibPurge("p:"+id);if(c.gcalId)gDel(c.gcalId);const ne=await delCustEvents("p:"+id,c.name);await pdrop([...pAllFiles(c),...st.added]);st.added=[];pClose(true);toast(ne?`고객과 연결된 일정 ${ne}개를 삭제했어요`:"고객을 삭제했어요")}catch(e){toast("삭제하지 못했어요.")}
   };
   $("pcSave").onclick=async()=>{
     if(st.busy){toast("파일을 올리는 중이에요. 잠시만 기다려 주세요");return}
@@ -2655,6 +2655,14 @@ async function ibMark(id,status){
   ibRows=ibRows.filter(x=>x.id!==id); ibBadge(); renderAlertBar();
 }
 let ibLastTarget="";
+// 고객을 지울 때 그 고객 일정도 함께 삭제 (cust로 연결된 일정 + 예전에 만든 "이름 차종" 연락 일정)
+async function delCustEvents(key,name){
+  if(!pevcol) return 0;
+  name=String(name||"").trim();
+  const list=pevents.filter(e=>e.cust===key||(!e.cust&&name&&e.cat==="call"&&String(e.title||"").startsWith(name+" ")));
+  for(const e of list){ try{ await pevcol.doc(e.id).delete(); if(e.gcalId) gDel(e.gcalId); }catch(_){} }
+  return list.length;
+}
 // 저장하기 전에 어느 고객으로 갈지 정해 두고 서버 기록에 먼저 남김 (중간에 끊겨도 고객 삭제 시 같이 지워지게)
 function ibPrep(v){ if(v.target==="new"&&!v.nid) v.nid="p"+puid(); return v.target==="new"?"p:"+v.nid:(v.target==="ev"?null:v.target); }
 function ibCardVals(card){ const g=k=>{const el=card.querySelector(`[data-ib="${k}"]`);return el?el.value.trim():""}; return {target:g("target"),name:g("name"),car:g("car"),stage:g("stage"),next:g("next"),act:g("act")}; }
@@ -2681,7 +2689,7 @@ async function ibSave(r,card,vals){
     const c=all.find(x=>x.id===target.slice(2)); if(!c||!col) throw "출고 고객을 찾을 수 없어요";
     const line=`[${date}] ${label} · ${a.summary||""}${act?" → "+act:""}`;
     await col.doc(c.id).update({memo:(c.memo?c.memo+"\n":"")+line, updatedAt:new Date().toISOString()});
-    if(next&&pevcol){ const now=new Date().toISOString(), eid="e"+puid(); const data={date:next,time:a.next_time||"",title:pBarLabel({name:c.name,car:c.model}),memo:act||a.summary||"",cat:"call",repeat:"",done:false,createdAt:now,updatedAt:now}; await pevcol.doc(eid).set(data); gSyncEvent(eid,data,null); }
+    if(next&&pevcol){ const now=new Date().toISOString(), eid="e"+puid(); const data={date:next,time:a.next_time||"",title:pBarLabel({name:c.name,car:c.model}),memo:act||a.summary||"",cat:"call",cust:"c:"+c.id,repeat:"",done:false,createdAt:now,updatedAt:now}; await pevcol.doc(eid).set(data); gSyncEvent(eid,data,null); }
     ibLastTarget="c:"+c.id;
     return `${c.name||"출고 고객"}님 메모에 남겼어요${next?" · "+pshort(next)+" 연락 일정 추가":""}`;
   }
