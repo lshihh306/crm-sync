@@ -3322,7 +3322,7 @@ const HOL_DEF = [
   {id:"newyear", name:"새해", icon:"🎍", when:"12월 31일",
    text:`안녕하세요 {이름} 😊\n현대자동차 신대치대리점 이성훈 차장입니다.\n\n{새해} 새해가 밝아오네요.\n올 한 해 저를 믿고 함께해 주셔서 정말 감사했습니다 🙏\n\n새해에도 늘 안전운전 하시고,\n하시는 일 모두 잘 되시길 진심으로 응원하겠습니다.\n\n새해 복 많이 받으세요!\n\n{서명}`}
 ];
-const HOL_PER_DAY = 80; // 하루에 이 인원이 넘으면 전날로 나눠서 보냄 (본번호 보호)
+const HOL_PER_DAY = 50; // 현대+BMW 합쳐 하루에 이 인원이 넘으면 전날로 나눠서 보냄 (개인 휴대폰 하루 문자 한도·스팸 감지 대비)
 let smsHol = {}; // settings/smsHoliday: {seol:{on:true,text:"..."}, ...}
 let holEditId = null;
 const holOn = id => !(smsHol[id] && smsHol[id].on === false);
@@ -3354,11 +3354,12 @@ function holWanted(){
   HOL_DEF.forEach(d => {
     if (!holOn(d.id)) return;
     const n = holNext(d); if (!n || n.send > hi) return;
-    const list = holTargets(n);
+    // 현대 → BMW 순서로 이어서 세고, 하루 HOL_PER_DAY명씩 하루씩 앞당겨 나눔
+    const list = holTargets(n).map(r => ["c", r]).concat(bmwLoaded ? bmw.filter(r => !r.smsOff && smsRecipients(r).length).sort((a,b)=>String(a.id).localeCompare(String(b.id))).map(r => ["b", r]) : []);
     let i = 0;
-    list.forEach(r => smsRecipients(r).forEach(p => {
-      const day = smsAddDays(n.send, -Math.floor(i++ / HOL_PER_DAY)); // 많으면 하루씩 앞당겨 나눔
-      out.push({key:`c:${r.id}:hol:${d.id}${n.year}${p.sfx}`, cid:r.id, name:p.name, phone:p.phone, kind:"hol", label:`${d.name} 인사`, date:day, body:holBody(d,p.r,n)});
+    list.forEach(([pre, r]) => smsRecipients(r).forEach(p => {
+      const day = smsAddDays(n.send, -Math.floor(i++ / HOL_PER_DAY));
+      out.push({key:`${pre}:${r.id}:hol:${d.id}${n.year}${p.sfx}`, cid:r.id, name:p.name, phone:p.phone, kind:"hol", label:`${d.name} 인사${pre==="b"?" (BMW)":""}`, date:day, body:holBody(d,p.r,n)});
     }));
   });
   return out;
@@ -3369,12 +3370,12 @@ function renderHol(){
   const nx = HOL_DEF.filter(d => holOn(d.id)).map(d => ({d, n:holNext(d)})).filter(o => o.n).sort((a,b) => a.n.send.localeCompare(b.n.send))[0];
   $("holSum").textContent = nx ? `다음: ${nx.d.name} ${fmt(nx.n.send).slice(5)}(${pwdOf(nx.n.send)}) 오후 2시` : "모두 꺼짐";
   box.innerHTML = HOL_DEF.map(d => {
-    const n = holNext(d), on = holOn(d.id), cnt = n ? holTargets(n).length : 0, days = n ? Math.ceil(cnt / HOL_PER_DAY) : 0;
+    const n = holNext(d), on = holOn(d.id), cntH = n ? holTargets(n).length : 0, cntB = bmwLoaded ? bmw.filter(r=>!r.smsOff&&smsRecipients(r).length).length : 0, cnt = cntH + cntB, days = n ? Math.ceil(cnt / HOL_PER_DAY) : 0;
     const when = n ? `${fmt(n.send)}(${pwdOf(n.send)}) 오후 2시${days>1?` 포함 ${days}일에 나눠서`:""}` : "다음 날짜 미정";
     const editing = holEditId === d.id, custom = !!(smsHol[d.id] && smsHol[d.id].text);
     return `<div class="hol-row${on?"":" off"}">
       <div class="hol-top"><div style="min-width:0"><b>${d.icon} ${d.name}</b>${custom?'<span class="badge ex">문구 수정함</span>':""}
-        <div class="meta">${n?esc(n.label)+" · ":""}${d.when} · <span class="mono">${when}</span> · 출고 고객 <b>${cnt}</b>명</div></div>
+        <div class="meta">${n?esc(n.label)+" · ":""}${d.when} · <span class="mono">${when}</span> · 현대 <b>${cntH}</b>명 + BMW <b>${cntB}</b>명</div></div>
         <div class="tools"><button class="check" type="button" data-hol-edit="${d.id}">${editing?"닫기":"문구 보기"}</button><button class="check${on?" on":""}" type="button" data-hol-on="${d.id}" aria-pressed="${on}">${on?"켜짐":"꺼짐"}</button></div></div>
       ${editing?`<textarea class="sm-ta" id="holTa" rows="12">${esc(holText(d))}</textarea>
         <div class="hint">{이름} → "홍길동 고객님", {차종} → 고객 차종, {서명} → 지점·이름·번호${d.id==="newyear"?', {새해} → "2027년"':""} 으로 바뀌어 들어가요.</div>
@@ -3518,11 +3519,7 @@ function bmwWanted(){
       if(d && d>=lo && d<=hi && !bmwNearHoliday(d))
         rc.forEach(p=>out.push({key:`b:${r.id}:q:${d}${p.sfx}`, cid:r.id, name:p.name, phone:p.phone, kind:"care", label:"BMW 고객 3개월 안부", date:d, body:bmwBody(p.r)}));
     }
-    HOL_DEF.forEach(h=>{
-      if(!holOn(h.id)) return;
-      const n=holNext(h); if(!n || n.send>hiHol) return;
-      rc.forEach(p=>out.push({key:`b:${r.id}:hol:${h.id}${n.year}${p.sfx}`, cid:r.id, name:p.name, phone:p.phone, kind:"hol", label:`${h.name} 인사 (BMW)`, date:n.send, body:holBody(h,p.r,n)}));
-    });
+    // 명절 인사는 holWanted()에서 현대 고객과 함께 하루 인원을 나눠서 만듦
   });
   return out;
 }
