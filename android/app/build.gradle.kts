@@ -11,8 +11,8 @@ android {
         applicationId = "com.lsh.crmsync"
         minSdk = 29
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.8"
+        versionCode = 12
+        versionName = "1.8.1"
     }
 
     // 업데이트 설치가 막히지 않도록 항상 같은 서명 키 사용 (개인용 앱)

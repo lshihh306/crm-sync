@@ -32,10 +32,14 @@ object CallbackSender {
     fun scan(ctx: Context) = synchronized(lock) {
         val prefs = Prefs(ctx)
         if (prefs.token.isBlank() || !prefs.callbackOn) return
-        if (!hasPermission(ctx) || !SmsSender.hasPermission(ctx)) return
+        if (!hasPermission(ctx) || !SmsSender.hasPermission(ctx)) {
+            if (!prefs.cbPermWarned) { prefs.log("⚠️ 콜백 문자: 통화기록 권한이 없어 통화를 확인하지 못해요 (앱에서 '통화기록 권한 허용')"); prefs.cbPermWarned = true }
+            return
+        }
+        prefs.cbPermWarned = false
         val now = System.currentTimeMillis()
-        // 처음 켤 때는 "지금 이후" 통화만 (예전 통화기록에 문자가 쏟아지지 않게)
-        if (prefs.cbSince == 0L) { prefs.cbSince = now; return }
+        // 처음 켤 때는 최근 30분 통화부터 (예전 통화기록에 문자가 쏟아지지 않게, 설치 직후 통화는 놓치지 않게)
+        if (prefs.cbSince == 0L) { prefs.cbSince = now - 30 * 60 * 1000L; prefs.log("📨 콜백 문자 시작 (최근 30분 통화부터 확인)") }
         val since = prefs.cbSince
         val calls = mutableListOf<Triple<Long, String, Pair<String, String>>>() // date, type, (number, name)
         try {

@@ -77,14 +77,19 @@ object SmsSender {
 
     private fun appInfo(ctx: Context): String {
         val v = try { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName } catch (_: Exception) { "?" }
-        return "상담 자동전송 $v · ${Build.MODEL}"
+        val perms = buildList {
+            if (!hasPermission(ctx)) add("문자 권한 없음")
+            if (!CallbackSender.hasPermission(ctx)) add("통화기록 권한 없음")
+        }
+        return "상담 자동전송 $v · ${Build.MODEL}" + if (perms.isEmpty()) "" else " · " + perms.joinToString(" · ")
     }
 
     fun run(ctx: Context) = synchronized(lock) {
         val prefs = Prefs(ctx)
-        if (prefs.token.isBlank() || !prefs.autoSmsOn) return
+        if (prefs.token.isBlank()) return
+        if (!prefs.autoSmsOn) { call(prefs, JSONObject().put("action", "ping").put("app", appInfo(ctx))); return }
         if (!hasPermission(ctx)) {
-            call(prefs, JSONObject().put("action", "ping").put("app", appInfo(ctx) + " · 문자 권한 없음"))
+            call(prefs, JSONObject().put("action", "ping").put("app", appInfo(ctx)))
             return
         }
         val res = call(prefs, JSONObject().put("action", "due").put("app", appInfo(ctx))) ?: return

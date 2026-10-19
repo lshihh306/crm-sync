@@ -40,6 +40,10 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("callbackOn", true)
         set(v) = p.edit().putBoolean("callbackOn", v).apply()
 
+    var cbPermWarned: Boolean
+        get() = p.getBoolean("cbPermWarned", false)
+        set(v) = p.edit().putBoolean("cbPermWarned", v).apply()
+
     /** 이 시각(ms) 이후 통화기록만 콜백 대상 */
     var cbSince: Long
         get() = p.getLong("cbSince", 0)
