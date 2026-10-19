@@ -71,7 +71,10 @@ object CallbackSender {
             prefs.cbSince = maxOf(prefs.cbSince, date)
             if (!Regex("^01\\d{8,9}$").matches(num)) continue // 휴대폰 번호에만
             val res = SmsSender.call(prefs, JSONObject().put("action", "callback").put("type", kind).put("phone", num).put("name", name).put("at", date)) ?: continue
-            if (res.optBoolean("waiting")) prefs.log("📨 통화 후 콜백 대기 · ${name.ifBlank { num }} (통화 내용이 고객 상담이면 보냄)")
+            if (res.optBoolean("waiting")) {
+                prefs.log("📨 통화 후 콜백 대기 · ${name.ifBlank { num }} (통화 내용이 고객 상담이면 바로 보냄)")
+                SmsSender.fastPoll(ctx)
+            }
             if (!res.optBoolean("send")) continue
             val id = res.getString("id"); val text = res.getString("body")
             val imgs = SmsSender.images(res)

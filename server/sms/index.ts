@@ -47,7 +47,10 @@ Deno.serve(async (req) => {
     const conf = cb[type] as Conf | undefined;
     if (cb.on === false || !conf || conf.on === false || !conf.text) return json({ send: false, reason: "꺼짐" });
     // 통화 끝난 뒤: 바로 보내지 않고 "대기"로 올려 둠 → 녹음 분석에서 고객 통화로 판단되면 ingest가 발송 목록에 올림
-    if (type === "after") {
+    // 단, 연락처가 ☆·@·₩ 로 저장된 고객이면 분석 기다리지 않고 바로 보냄
+    const savedName = String(body.name ?? "").trim();
+    const knownCustomer = /^[☆★@₩]/.test(savedName);
+    if (type === "after" && !knownCustomer) {
       const { data: done } = await db.from("sms_queue").select("id").eq("key", "cb:" + phone).limit(1);
       if (done && done.length) return json({ send: false, reason: "이미 보낸 번호" });
       const callAt = Number(body.at) > 0 ? new Date(Number(body.at)).toISOString() : new Date().toISOString();
@@ -59,8 +62,11 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
     const { data: ins, error } = await db.from("sms_queue").upsert({
       // 부재중·거절은 모든 번호에 번호당 한 번 (통화 후 콜백과는 따로 셈), 글자 문자
-      key: "cbm:" + phone, name: String(body.name ?? "").slice(0, 40) || null, phone, kind: "callback", label,
+      // 통화 후(저장된 고객)는 cb: 키로, 사진 포함
+      key: (type === "after" ? "cb:" : "cbm:") + phone, name: savedName.slice(0, 40) || null, phone, kind: "callback", label,
       body: conf.text, send_at: now, status: "sending", claimed_at: now, edited: true,
+      media_id: type === "after" ? (conf.image || conf.image2 || null) : null,
+      media_id2: type === "after" && conf.image && conf.image2 ? conf.image2 : null,
     }, { onConflict: "key", ignoreDuplicates: true }).select("id, body, media_id, media_id2");
     if (error) return json({ send: false, reason: error.message }, 500);
     if (!ins || !ins.length) return json({ send: false, reason: "이미 보낸 번호" });
@@ -95,12 +101,13 @@ Deno.serve(async (req) => {
 
   const enabled = !!set?.enabled;
   const h = kstHour();
-  if (h < SEND_FROM || h >= SEND_UNTIL) return json({ enabled, night: true, items: [] });
+  const night = h < SEND_FROM || h >= SEND_UNTIL;
 
-  // 자동 발송이 꺼져 있어도 "내 폰으로 테스트"와 콜백 문자 다시 보내기는 보냄
+  // 콜백 문자는 통화에 대한 답이라 밤에도, 자동 발송이 꺼져 있어도 바로 보냄. 테스트 문자도 꺼져 있어도 보냄
   let q = db.from("sms_queue").select("id")
     .eq("status", "scheduled").lte("send_at", new Date().toISOString());
-  if (!enabled) q = q.in("kind", ["test", "callback"]);
+  if (night) q = q.eq("kind", "callback");
+  else if (!enabled) q = q.in("kind", ["test", "callback"]);
   const { data: due } = await q.order("send_at", { ascending: true }).limit(30);
   if (!due || !due.length) return json({ enabled, items: [] });
 

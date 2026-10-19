@@ -564,7 +564,7 @@ label.full{grid-column:1/-1}
         <div class="tools"><button class="check" type="button" id="cbMaster" aria-pressed="false">꺼짐</button></div></div>
       <div id="cbBody" class="fold-body" hidden>
         <span class="meta"><b>부재중·거절</b>은 모든 번호에 바로 보내요. <b>통화 끝난 뒤</b>는 통화 녹음을 분석해서 <b>고객과의 차량 상담일 때만</b> 보내요(분석에 몇 분 걸려요). 같은 번호에는 종류별로 한 번만 나가요. 본폰 앱에서 통화기록 권한을 허용해야 동작해요.</span>
-        <div id="cbWaits"></div>
+
         <div id="cbList"></div>
       </div>
     </section>
@@ -1216,24 +1216,19 @@ function renderAlertBar(){
   all.forEach(r=>{ const i=careInfo(r); if(i&&i.due){ if(i.due.m===0) thanks++; else care++; } });
   const ins=all.filter(r=>needsCall(r)).length;
   const items=[];
-  if(thanks) items.push(`<button class="abtn" type="button" data-go="care">🎉 출고 감사 인사 <b>${thanks}</b>명</button>`);
-  if(care) items.push(`<button class="abtn" type="button" data-go="care">💬 안부 인사 <b>${care}</b>명</button>`);
   const due=pDue().sort((a,b)=>(a.nextDate||"").localeCompare(b.nextDate||""));
   const pd=due.length, tday=todayStr();
   const te=(typeof pTodayEvents==="function")?pTodayEvents().length:0;
-  if(te) items.unshift(`<button class="abtn" type="button" data-go="cal">🗓 오늘 일정 <b>${te}</b>개</button>`);
   if(pd){
     const lateN=due.filter(c=>c.nextDate<tday).length;
     items.unshift(`<button class="abtn call" type="button" data-go="ps">📞 연락 고객 <b>${pd}</b>명${lateN?` <b class="late">(지연 ${lateN})</b>`:""}</button>`);
   }
-  if(ins) items.push(`<button class="abtn" type="button" data-go="alerts">📅 보험 만기 연락 <b>${ins}</b>명</button>`);
   const ibn=(typeof ibPendingCount==="function")?ibPendingCount():0;
   const lowc=(typeof ibLowCredit==="function")?ibLowCredit():[];
   lowc.forEach(x=>items.unshift(`<a class="abtn" style="border-color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger);text-decoration:none" href="${x.url}" target="_blank" rel="noopener">💳 ${x.name} 잔액 부족 · 충전하기 ›</a>`));
   const smsF=(typeof smsFailedN==="function")?smsFailedN():0;
   if(smsF) items.unshift(`<button class="abtn" style="border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)" type="button" data-go="sms">⚠ 자동 문자 실패 <b>${smsF}</b>건</button>`);
   if(typeof smsAppOff==="function" && smsAppOff()) items.unshift(`<button class="abtn" style="border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)" type="button" data-go="sms">📵 본폰 자동 문자 앱 연결 끊김</button>`);
-  if(ibn) items.unshift(`<button class="abtn call" type="button" data-go="inbox">📥 새 상담 <b>${ibn}</b>건 확인</button>`);
   bar.innerHTML = items.length ? `<span class="lbl">오늘 해야 할 일</span>${items.join("")}` : "";
   bar.hidden = !items.length;
 }
@@ -3175,8 +3170,7 @@ async function smsLoad(quiet){
   try{
     const [set]=await sbSql("select enabled, send_hour, app_seen_at, app_info, callback from public.sms_settings where id=1");
     smsSet=set||{enabled:false};
-    smsRows=await sbSql("select id,key,customer_id,name,phone,kind,label,body,send_at,status,edited,sent_at,error,note,updated_at,media_id from public.sms_queue where status in ('scheduled','sending','failed') or updated_at > now() - interval '30 days' order by send_at asc limit 500");
-    try{ cbWaits=await sbSql("select phone,name,call_at,status,note from public.callback_wait where call_at > now() - interval '3 days' order by call_at desc limit 15"); }catch(_){ cbWaits=[]; }
+    smsRows=await sbSql("select id,key,customer_id,name,phone,kind,label,body,send_at,status,edited,sent_at,error,note,updated_at,media_id from public.sms_queue where kind <> 'callback' and not hidden and (status in ('scheduled','sending','failed') or updated_at > now() - interval '30 days') order by send_at asc limit 500");
     smsState="ok"; smsErr="";
   }catch(err){ smsState="err"; smsErr=err&&err.code?ibErrText(err):"자동 문자 목록을 불러오지 못했어요"; }
   finally{ smsBusy=false; renderSms(); renderAlertBar(); }
@@ -3204,6 +3198,9 @@ function smsCard(q){
   if(q.status==="scheduled"){ tools.push(`<button class="check" type="button" data-sms-edit="${q.id}">문구 수정</button>`,`<button class="check" type="button" data-sms-now="${q.id}">지금 보내기</button>`,`<button class="check" type="button" data-sms-cancel="${q.id}">보내지 않기</button>`); }
   if(q.status==="failed"){ tools.push(`<button class="check due" type="button" data-sms-retry="${q.id}">다시 보내기</button>`,`<button class="check" type="button" data-sms-cancel="${q.id}">보내지 않기</button>`); }
   if(q.status==="canceled" && q.key.startsWith("c:")){ tools.push(`<button class="check" type="button" data-sms-retry="${q.id}">다시 예약</button>`); }
+  if(["sent","canceled"].includes(q.status)) tools.push(smsAsk===("del:"+q.id)
+    ? `<span class="confirm">이 기록을 지울까요?</span><button class="btn danger" type="button" data-sms-del="${q.id}">삭제</button><button class="btn ghost" type="button" data-sms-askx="1">취소</button>`
+    : `<button class="btn ghost danger" type="button" data-sms-ask="del:${q.id}">삭제</button>`);
   if(cid && ["scheduled","failed"].includes(q.status)) tools.push(smsAsk===("off:"+q.id)
     ? `<span class="confirm">이 고객에게는 앞으로 자동 문자를 안 보낼까요?</span><button class="btn danger" type="button" data-sms-off="${esc(cid)}">끄기</button><button class="btn ghost" type="button" data-sms-askx="1">취소</button>`
     : `<button class="btn ghost" type="button" data-sms-ask="off:${q.id}">이 고객 자동 문자 끄기</button>`);
@@ -3244,7 +3241,7 @@ function renderSms(){
   if(smsFilter==="off"){ list=canceled; empty="보내지 않기로 한 문자가 없어요."; }
   $("smsList").innerHTML = smsState!=="ok" ? "" : list.length ? list.map(smsCard).join("") : `<div class="empty">${empty}</div>`;
   const offs=all.filter(r=>r.smsOff);
-  renderHol(); if(typeof renderCb==="function"){ renderCb(); renderCbWaits(); }
+  renderHol(); if(typeof renderCb==="function") renderCb();
   $("smsOffList").innerHTML = offs.length ? `<span class="meta">자동 문자 끈 고객:</span> ${offs.map(r=>`<button class="chip" type="button" data-sms-on="${esc(r.id)}" title="다시 켜기">${esc(r.name||"(이름 없음)")} ✕</button>`).join(" ")}` : "";
 }
 async function smsDo(q, msg){ try{ await sbSql(q); if(msg) toast(msg); }catch(err){ toast(err&&err.code?ibErrText(err):"처리하지 못했어요. 잠시 후 다시 시도해 주세요."); } await smsLoad(true); }
@@ -3271,6 +3268,7 @@ $("viewSms").addEventListener("click",async e=>{
   if(d.smsCancel){ await smsDo(`update public.sms_queue set status='canceled', note='직접 취소', updated_at=now() where id=${sqlq(d.smsCancel)} and status in ('scheduled','failed')`,"이 문자는 보내지 않아요."); return; }
   if(d.smsRetry){ await smsDo(`update public.sms_queue set status='scheduled', error=null, note=null, edited=true, send_at=greatest(now(), send_at), updated_at=now() where id=${sqlq(d.smsRetry)} and status in ('failed','canceled')`,"다시 보내도록 예약했어요."); return; }
   if(d.smsAsk){ smsAsk=d.smsAsk; renderSms(); return; }
+  if(d.smsDel){ smsAsk=null; await smsDo(`update public.sms_queue set hidden=true where id=${sqlq(d.smsDel)} and status in ('sent','canceled')`,"삭제했어요."); return; }
   if(d.smsAskx){ smsAsk=null; renderSms(); return; }
   if(d.smsOff && col){ smsAsk=null; try{ await col.doc(d.smsOff).update({smsOff:true}); toast("이 고객 자동 문자를 껐어요."); }catch(_){ toast("저장하지 못했어요."); } smsScheduleSync(500); return; }
   if(d.smsOn && col){ try{ await col.doc(d.smsOn).update({smsOff:false}); toast("자동 문자를 다시 켰어요."); }catch(_){ toast("저장하지 못했어요."); } smsScheduleSync(500); return; }
@@ -3416,9 +3414,9 @@ function renderCb(){
           <div class="tools"><label class="btn" for="cbFile${i}" style="cursor:pointer">${id?`사진 ${i+1} 바꾸기`:`사진 ${i+1} 넣기`}</label><input type="file" id="cbFile${i}" accept="image/*" data-cb-slot="${slot}" hidden>${id?`<button class="btn ghost" type="button" data-cb-noimg="${slot}">사진 ${i+1} 빼기</button>`:""}</div></div>`; }).join("")}
           <div class="tools">${c.image||c.image2?`<button class="btn ghost" type="button" data-cb-test="after">사진 문자로 내 폰 테스트</button>`:""}<span class="hint">사진은 2장까지 넣을 수 있고, 넣으면 사진 문자(MMS)로 나가요. 통신사 용량에 맞게 장당 약 130KB로 자동으로 줄여서 저장해요.</span></div></div>`:`<span class="hint">부재중·거절 문자는 글자 문자로만 나가요.</span>`}`:""}
     </div>`;
-  }).join("") + `<div class="meta">최근 30일 콜백 문자 <b>${sentN}</b>건 보냄 · 아래 "보낸 문자"에서 확인</div>`;
+  }).join("") + `<div class="meta">보낸 콜백 문자는 본폰 메시지 앱에서 확인해요.</div>`;
   const onN=CB_DEF.filter(d=>(cf[d.id]||{}).on!==false).length;
-  $("cbSum").textContent = !ok ? "" : !master ? "꺼짐" : `${onN}종 켜짐 · 30일간 ${sentN}건 보냄`;
+  $("cbSum").textContent = !ok ? "" : !master ? "꺼짐" : `${onN}종 켜짐`;
 }
 async function cbSave(next){
   await smsDo(`update public.sms_settings set callback=${sqlq(JSON.stringify(next))}::jsonb, updated_at=now() where id=1`);

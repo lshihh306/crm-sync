@@ -207,6 +207,26 @@ object SmsSender {
         }
     }
 
+    // 통화 후 콜백이 "분석 중"이면, 고객으로 판단되는 즉시 보내도록 10분 동안 20초마다 확인
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val pollIo = java.util.concurrent.Executors.newSingleThreadExecutor()
+    @Volatile private var pollCtx: Context? = null
+    @Volatile private var pollLeft = 0
+    private val pollTick = object : Runnable {
+        override fun run() {
+            val c = pollCtx ?: return
+            if (pollLeft-- <= 0) return
+            pollIo.execute { try { SmsSender.run(c) } catch (_: Throwable) {} }
+            main.postDelayed(this, 20_000L)
+        }
+    }
+    fun fastPoll(ctx: Context, minutes: Int = 10) {
+        pollCtx = ctx.applicationContext
+        pollLeft = minutes * 3
+        main.removeCallbacks(pollTick)
+        main.postDelayed(pollTick, 20_000L)
+    }
+
     private val net = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
     /** 15분마다 확인 (+ 감시 서비스가 켜져 있으면 5분마다) */
