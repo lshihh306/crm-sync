@@ -139,6 +139,39 @@ function b64(buf: ArrayBuffer) {
   return btoa(bin);
 }
 
+// 콜백 문자(통화 끝난 뒤): 앱이 통화 종료 때 callback_wait에 "대기"로 올려 둠.
+// 이 통화 녹음 분석 결과가 고객 통화면 → sms_queue에 올려서 본폰이 보냄, 아니면 건너뜀
+async function resolveCallback(inboxId: string, info: { name: string | null; phone: string | null }, customer: boolean, why: string) {
+  try {
+    const { data: row } = await db.from("inbox").select("occurred_at").eq("id", inboxId).single();
+    if (!row?.occurred_at) return;
+    const at = new Date(row.occurred_at).getTime();
+    const { data: waits } = await db.from("callback_wait").select("*").eq("status", "waiting")
+      // 녹음 파일 시각 = 통화 시작. 앱이 통화 시작 시각을 보내지만, 예전 앱은 통화 끝난 시각이라 넉넉히 90분까지 봄
+      .gte("call_at", new Date(at - 5 * 60000).toISOString()).lte("call_at", new Date(at + 90 * 60000).toISOString());
+    if (!waits || !waits.length) return;
+    const ph = (info.phone ?? "").replace(/\D/g, ""), nm = (info.name ?? "").replace(/\s/g, "");
+    const near = (x: { call_at: string }) => Math.abs(new Date(x.call_at).getTime() - at);
+    const w = (ph.length >= 8 && waits.find((x) => x.phone.slice(-8) === ph.slice(-8)))
+      || (nm && waits.find((x) => (x.name ?? "").replace(/\s/g, "") === nm))
+      || waits.sort((a, b) => near(a) - near(b))[0];
+    if (!w) return;
+    const done = (status: string, note: string) =>
+      db.from("callback_wait").update({ status, note, inbox_id: inboxId, decided_at: new Date().toISOString() }).eq("id", w.id);
+    if (!customer) { await done("skipped", `고객 통화 아님 (${why})`); return; }
+    const { data: st } = await db.from("sms_settings").select("callback").eq("id", 1).single();
+    const cb = (st?.callback ?? {}) as Record<string, { on?: boolean; text?: string; image?: string; image2?: string } | boolean>;
+    const conf = cb.after as { on?: boolean; text?: string; image?: string; image2?: string } | undefined;
+    if (cb.on === false || !conf || conf.on === false || !conf.text) { await done("skipped", "통화 후 콜백 꺼짐"); return; }
+    const { data: ins } = await db.from("sms_queue").upsert({
+      key: "cb:" + w.phone, name: w.name || null, phone: w.phone, kind: "callback", label: "콜백 · 통화 후",
+      body: conf.text, send_at: new Date().toISOString(), status: "scheduled", edited: true,
+      media_id: conf.image || conf.image2 || null, media_id2: conf.image && conf.image2 ? conf.image2 : null,
+    }, { onConflict: "key", ignoreDuplicates: true }).select("id");
+    await done(ins && ins.length ? "queued" : "skipped", ins && ins.length ? "고객 통화 → 발송 목록에 올림" : "이미 보낸 번호");
+  } catch (_) { /* 콜백 처리 실패는 상담 분석에 영향 주지 않음 */ }
+}
+
 async function handle(id: string, kind: string, file: Blob | null, fileName: string, text: string, info: { name: string | null; phone: string | null }, storagePath: string | null = null) {
   try {
     let transcript = text;
@@ -162,6 +195,7 @@ async function handle(id: string, kind: string, file: Blob | null, fileName: str
     }
     // 차량 관련이 아니면: 녹음·캡처 파일과 내용을 바로 지우고 기록만 '정리됨'으로 남김 (사적 대화 보관 안 함)
     if (result && result.relevant !== false && (await isBlocked(info.name, info.phone) || await isBlocked(result.customer_name, result.phone))) result.relevant = false;
+    if (kind === "call") await resolveCallback(id, info, !!result && result.relevant !== false && result.category !== "개인일정", result?.category ?? "기타");
     if (result && result.relevant === false) {
       if (storagePath) await db.storage.from("uploads").remove([storagePath]);
       await db.from("inbox").update({

@@ -153,7 +153,7 @@ class MainActivity : AppCompatActivity() {
 
         section(root, "⑤ 콜백 문자 (통화 후·부재중·거절)")
         root.addView(TextView(this).apply {
-            text = "통화가 끝나거나, 부재중·거절이면 그 번호로 문자를 보내요. 같은 번호에는 평생 한 번만 나가요. 문구 수정과 종류별 켜고 끄기는 관리 시스템 '자동 문자' 탭에서 해요. 처음 켠 이후의 통화부터 적용돼요."
+            text = "부재중·거절이면 그 번호로 바로 문자를 보내요. 통화가 끝난 뒤 문자는 통화 녹음을 분석해서 고객과의 차량 상담일 때만 보내요(분석에 몇 분 걸려요). 같은 번호에는 종류별로 한 번만 나가요. 문구 수정과 종류별 켜고 끄기는 관리 시스템 '자동 문자' 탭에서 해요. 처음 켠 이후의 통화부터 적용돼요."
             textSize = 12.5f
         })
         root.addView(sw("📨 콜백 문자 보내기", { prefs.callbackOn }) { prefs.callbackOn = it; if (it) WatchService.start(this) })

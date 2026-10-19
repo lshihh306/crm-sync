@@ -46,15 +46,21 @@ Deno.serve(async (req) => {
     const cb = (st?.callback ?? {}) as Record<string, Conf | boolean>;
     const conf = cb[type] as Conf | undefined;
     if (cb.on === false || !conf || conf.on === false || !conf.text) return json({ send: false, reason: "꺼짐" });
+    // 통화 끝난 뒤: 바로 보내지 않고 "대기"로 올려 둠 → 녹음 분석에서 고객 통화로 판단되면 ingest가 발송 목록에 올림
+    if (type === "after") {
+      const { data: done } = await db.from("sms_queue").select("id").eq("key", "cb:" + phone).limit(1);
+      if (done && done.length) return json({ send: false, reason: "이미 보낸 번호" });
+      const callAt = Number(body.at) > 0 ? new Date(Number(body.at)).toISOString() : new Date().toISOString();
+      await db.from("callback_wait").insert({ phone, name: String(body.name ?? "").slice(0, 40) || null, call_at: callAt });
+      return json({ send: false, waiting: true, reason: "통화 내용 확인 후 고객이면 발송" });
+    }
     const labels: Record<string, string> = { after: "콜백 · 통화 후", missed: "콜백 · 부재중", rejected: "콜백 · 거절" };
     const label = labels[type] ?? "콜백";
     const now = new Date().toISOString();
     const { data: ins, error } = await db.from("sms_queue").upsert({
-      key: "cb:" + phone, name: String(body.name ?? "").slice(0, 40) || null, phone, kind: "callback", label,
+      // 부재중·거절은 모든 번호에 번호당 한 번 (통화 후 콜백과는 따로 셈), 글자 문자
+      key: "cbm:" + phone, name: String(body.name ?? "").slice(0, 40) || null, phone, kind: "callback", label,
       body: conf.text, send_at: now, status: "sending", claimed_at: now, edited: true,
-      // 사진은 "통화 끝난 뒤"에만 (최대 2장). 부재중·거절은 글자 문자
-      media_id: type === "after" ? (conf.image || conf.image2 || null) : null,
-      media_id2: type === "after" && conf.image && conf.image2 ? conf.image2 : null,
     }, { onConflict: "key", ignoreDuplicates: true }).select("id, body, media_id, media_id2");
     if (error) return json({ send: false, reason: error.message }, 500);
     if (!ins || !ins.length) return json({ send: false, reason: "이미 보낸 번호" });
@@ -77,6 +83,9 @@ Deno.serve(async (req) => {
   }
 
   // action === "due": 지금 보낼 문자를 가져감
+  // 3시간 넘게 녹음 분석 결과가 없는 통화 후 콜백 대기는 정리 (녹음이 없던 통화 등)
+  await db.from("callback_wait").update({ status: "expired", note: "통화 녹음 분석 결과가 없어 보내지 않음", decided_at: new Date().toISOString() })
+    .eq("status", "waiting").lt("call_at", new Date(Date.now() - 3 * 3600000).toISOString());
   const { data: set } = await db.from("sms_settings").select("enabled").eq("id", 1).single();
 
   // 폰이 가져간 뒤 30분 넘게 결과가 안 온 건 → 두 번 보내지 않도록 "실패(확인 필요)"로
