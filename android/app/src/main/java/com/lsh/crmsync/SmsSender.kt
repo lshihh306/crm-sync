@@ -36,7 +36,11 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class SmsWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
-        SmsSender.run(applicationContext)
+        try {
+            SmsSender.run(applicationContext)
+        } catch (t: Throwable) {
+            Prefs(applicationContext).log("⚠️ 자동 문자 작업 오류: ${t.javaClass.simpleName} ${t.message ?: ""}".take(200))
+        }
         return Result.success()
     }
 }
@@ -82,23 +86,25 @@ object SmsSender {
         val res = call(prefs, JSONObject().put("action", "due").put("app", appInfo(ctx))) ?: return
         val items = res.optJSONArray("items") ?: return
         if (items.length() == 0) return
-        val results = JSONArray()
+        prefs.log("✉️ 자동 문자 ${items.length()}건 가져옴")
         for (i in 0 until items.length()) {
             val it = items.getJSONObject(i)
             val id = it.getString("id")
-            val phone = it.optString("phone").filter { c -> c.isDigit() }
-            val text = it.optString("body")
             val name = it.optString("name")
-            val err = if (phone.length < 10 || text.isBlank()) "전화번호나 문구가 비어 있어요" else send(ctx, phone, text)
-            results.put(JSONObject().put("id", id).put("ok", err == null).apply { if (err != null) put("error", err) })
+            val err: String? = try {
+                val phone = it.optString("phone").filter { c -> c.isDigit() }
+                val text = it.optString("body")
+                if (phone.length < 10 || text.isBlank()) "전화번호나 문구가 비어 있어요" else send(ctx, phone, text)
+            } catch (t: Throwable) {
+                "앱 오류: ${t.javaClass.simpleName} ${t.message ?: ""}".take(200)
+            }
             prefs.log(if (err == null) "✉️ 자동 문자 보냄 · $name" else "⚠️ 자동 문자 실패 · $name · $err")
+            // 한 통 보낼 때마다 바로 결과 보고 (실패하면 한 번 더)
+            val one = JSONArray().put(JSONObject().put("id", id).put("ok", err == null).apply { if (err != null) put("error", err) })
+            val body = JSONObject().put("action", "report").put("results", one)
+            if (call(prefs, body) == null) { Thread.sleep(3000); if (call(prefs, body) == null) prefs.log("⚠️ 발송 결과를 서버에 못 알렸어요 · $name") }
             // 통신사 스팸 감지를 피하려고 한 통씩 간격을 둠
             if (i < items.length() - 1) Thread.sleep(8000)
-        }
-        // 결과 보고 (실패하면 한 번 더)
-        if (call(prefs, JSONObject().put("action", "report").put("results", results)) == null) {
-            Thread.sleep(5000)
-            call(prefs, JSONObject().put("action", "report").put("results", results))
         }
     }
 
@@ -117,8 +123,8 @@ object SmsSender {
                 latch.countDown()
             }
         }
-        ContextCompat.registerReceiver(ctx.applicationContext, rcv, IntentFilter(ACTION_SENT), ContextCompat.RECEIVER_NOT_EXPORTED)
         try {
+            ContextCompat.registerReceiver(ctx.applicationContext, rcv, IntentFilter(ACTION_SENT), ContextCompat.RECEIVER_NOT_EXPORTED)
             val sent = ArrayList<PendingIntent>()
             for (k in parts.indices) {
                 val i = Intent(ACTION_SENT).setPackage(ctx.packageName).putExtra("tag", tag).putExtra("part", k)

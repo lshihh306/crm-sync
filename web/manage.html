@@ -3162,7 +3162,7 @@ function smsCard(q){
     ? `<span class="confirm">이 고객에게는 앞으로 자동 문자를 안 보낼까요?</span><button class="btn danger" type="button" data-sms-off="${esc(cid)}">끄기</button><button class="btn ghost" type="button" data-sms-askx="1">취소</button>`
     : `<button class="btn ghost" type="button" data-sms-ask="off:${q.id}">이 고객 자동 문자 끄기</button>`);
   return `<article class="smscard st-${stCls}">
-    <div class="sm-top"><div style="min-width:0"><b>${SMS_KIND[q.kind]||"✉️"} ${esc(q.name||"(이름 없음)")}</b><span class="status ${stCls==="done"?"done":"need"} ${stCls}">${stTxt}</span>${q.edited?'<span class="badge ex">직접 수정</span>':""}
+    <div class="sm-top"><div style="min-width:0"><b>${SMS_KIND[q.kind]||"✉️"} ${esc(q.name||"(이름 없음)")}</b><span class="status ${stCls==="done"?"done":"need"} ${stCls}">${stTxt}</span>${q.edited&&q.kind!=="test"?'<span class="badge ex">직접 수정</span>':""}
       <div class="meta">${esc(q.label||"")} · <span class="mono">${esc(smsPhoneFmt(q.phone||""))}</span></div></div>
       <div class="sm-when">${when}</div></div>
     ${q.error?`<div class="sm-err">⚠ ${esc(q.error)}</div>`:""}${q.status==="canceled"&&q.note?`<div class="meta">사유: ${esc(q.note)}</div>`:""}
