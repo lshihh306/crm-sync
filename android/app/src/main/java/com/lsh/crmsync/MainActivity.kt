@@ -29,8 +29,8 @@ class MainActivity : AppCompatActivity() {
 
     private val perms: Array<String>
         get() = if (Build.VERSION.SDK_INT >= 33)
-            arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.SEND_SMS)
-        else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.SEND_SMS)
+            arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.SEND_SMS, Manifest.permission.READ_PHONE_STATE)
+        else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.SEND_SMS, Manifest.permission.READ_PHONE_STATE)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -144,7 +144,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(Button(this).apply {
             text = "지금 보낼 문자 확인"
             setOnClickListener {
-                if (!SmsSender.hasPermission(this@MainActivity)) { requestPermissions(arrayOf(Manifest.permission.SEND_SMS), 2); return@setOnClickListener }
+                if (!SmsSender.hasPermission(this@MainActivity)) { requestPermissions(SmsSender.PERMS, 2); return@setOnClickListener }
                 SmsSender.runNow(this@MainActivity)
                 Toast.makeText(this@MainActivity, "확인 중… 보낼 문자가 있으면 바로 나가요", Toast.LENGTH_SHORT).show()
                 log.postDelayed({ refresh() }, 12000)
@@ -178,7 +178,7 @@ class MainActivity : AppCompatActivity() {
         return ScrollView(this).apply { addView(root) }
     }
 
-    private fun hasPerms() = perms.filter { it != Manifest.permission.POST_NOTIFICATIONS && it != Manifest.permission.SEND_SMS }
+    private fun hasPerms() = perms.filter { it != Manifest.permission.POST_NOTIFICATIONS && it != Manifest.permission.SEND_SMS && it != Manifest.permission.READ_PHONE_STATE }
         .all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
 
     private fun batteryOk(): Boolean {
@@ -203,7 +203,7 @@ class MainActivity : AppCompatActivity() {
     private fun refresh() {
         val lines = mutableListOf<String>()
         lines += if (hasPerms()) "✅ 사진·오디오 접근 허용됨" else "⚠️ 사진·오디오 접근 권한이 필요해요"
-        lines += if (SmsSender.hasPermission(this)) "✅ 문자 보내기 허용됨 (자동 문자)" else "⚠️ 자동 문자를 쓰려면 '문자 보내기' 권한을 허용해 주세요"
+        lines += if (SmsSender.hasPermission(this)) "✅ 문자·전화 권한 허용됨 (자동 문자)" else "⚠️ 자동 문자를 쓰려면 '문자'와 '전화' 권한을 허용해 주세요 (권한 허용 버튼)"
         lines += if (batteryOk()) "✅ 배터리 최적화 제외됨" else "⚠️ 배터리 최적화 제외를 해주세요 (안 하면 전송이 늦어져요)"
         lines += if (prefs.token.isNotBlank()) "✅ 서버 연결 정보 저장됨" else "⚠️ 앱 출입증을 넣고 저장해 주세요"
         status.text = lines.joinToString("\n")

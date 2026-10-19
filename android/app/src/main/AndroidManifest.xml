@@ -13,6 +13,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- 자동 문자: 관리 시스템이 정한 안부·감사·보험 문자를 이 폰 번호로 보냄 -->
     <uses-permission android:name="android.permission.SEND_SMS" />
+    <!-- 삼성 폰은 문자 발송 때 유심 정보(GID1)를 읽어서 전화 상태 권한이 함께 필요 -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <application

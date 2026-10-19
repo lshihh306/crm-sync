@@ -52,8 +52,11 @@ object SmsSender {
     private const val ACTION_SENT = "com.lsh.crmsync.SMS_SENT"
     private val reqCode = AtomicInteger(1000)
 
-    fun hasPermission(ctx: Context) =
-        ContextCompat.checkSelfPermission(ctx, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
+    val PERMS = arrayOf(Manifest.permission.SEND_SMS, Manifest.permission.READ_PHONE_STATE)
+
+    fun hasPermission(ctx: Context) = PERMS.all {
+        ContextCompat.checkSelfPermission(ctx, it) == PackageManager.PERMISSION_GRANTED
+    }
 
     /** ingest 주소에서 sms 함수 주소를 만듦 */
     private fun url(prefs: Prefs) = prefs.serverUrl.replace(Regex("/ingest/?$"), "/sms")
