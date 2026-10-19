@@ -476,6 +476,11 @@ label.full{grid-column:1/-1}
 #smsSwitch[aria-pressed="false"]{border-color:var(--warn);color:var(--warn)}
 .stats.four{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:560px){.stats.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.bmw-row{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.3fr) minmax(0,1fr) auto;gap:12px 14px;align-items:start}
+.bmw-row .who b{font-size:16px}
+.bmw-row .tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.bmw-row.bmw-form{display:flex;flex-direction:column;gap:12px}
+@media (max-width:760px){.bmw-row{grid-template-columns:minmax(0,1fr)}}
 .holbox{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
 .holbox .ex-head{display:flex;flex-direction:column;gap:2px}
 .hol-row{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
@@ -520,7 +525,8 @@ label.full{grid-column:1/-1}
   <nav class="tabs" role="tablist">
     <button class="tab" type="button" role="tab" id="tabCal" data-tab="cal" aria-selected="true">캘린더 <span class="count" id="calBadge" hidden>0</span></button>
     <button class="tab" type="button" role="tab" id="tabPS" data-tab="ps" aria-selected="false">가망 고객 <span class="count" id="psBadge" hidden>0</span></button>
-    <button class="tab" type="button" role="tab" id="tabLedger" data-tab="ledger" aria-selected="false">출고 고객</button>
+    <button class="tab" type="button" role="tab" id="tabLedger" data-tab="ledger" aria-selected="false">출고 고객(현대)</button>
+    <button class="tab" type="button" role="tab" id="tabBmw" data-tab="bmw" aria-selected="false">출고 고객(BMW)</button>
     <button class="tab" type="button" role="tab" id="tabAlerts" data-tab="alerts" aria-selected="false">보험 만료 알림 <span class="count" id="tabBadge" hidden>0</span></button>
     <button class="tab" type="button" role="tab" id="tabCare" data-tab="care" aria-selected="false">안부 인사 <span class="count" id="careBadge" hidden>0</span></button>
     <button class="tab" type="button" role="tab" id="tabSms" data-tab="sms" aria-selected="false">자동 문자 <span class="count" id="smsBadge" style="background:var(--danger)" hidden>0</span></button>
@@ -583,6 +589,27 @@ label.full{grid-column:1/-1}
     </div>
     <div id="smsList" class="group"></div>
     <div class="actions" style="justify-content:space-between;align-items:center"><div id="smsOffList" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div><button class="btn ghost" type="button" data-sf="off">보내지 않기로 한 문자 보기</button></div>
+  </div>
+
+  <div id="viewBmw" class="view" hidden>
+    <div class="ledger-top"><b>출고 고객(BMW) <span class="meta" style="font-size:14px;font-weight:400">· <span id="bmwTotal">–</span>명</span></b><div class="actions"><button class="btn" id="bmwPasteBtn" type="button">여러 명 붙여넣기</button><button class="btn primary" id="bmwAdd" type="button">+ 고객 추가</button></div></div>
+    <p class="lead">BMW 근무 시절 출고 고객 명단이에요. 자동 문자는 <b>명절·새해·크리스마스 인사</b>와 <b>3개월마다 안부</b>만 나가요(출고일 기준, 출고일이 없으면 등록한 날 기준). 안부 날짜가 명절 인사와 7일 안쪽으로 겹치면 그 안부는 건너뛰어요.</p>
+    <section class="exbox" id="bmwPaste" hidden>
+      <div class="ex-head"><b>여러 명 붙여넣기</b><span class="meta">한 줄에 한 명씩: 이름, 전화번호, 차종, 출고일 (쉼표나 탭으로 구분, 엑셀에서 복사해 붙여도 돼요)</span></div>
+      <textarea id="bmwPasteTa" rows="6" placeholder="홍길동, 010-1234-5678, BMW 520i, 2021-05-03&#10;김영희, 010-2222-3333, X5"></textarea>
+      <div class="actions"><button class="btn primary" id="bmwPasteSave" type="button">넣기</button></div>
+    </section>
+    <section class="holbox">
+      <div class="hol-top"><div style="min-width:0"><b>💬 3개월마다 안부 문자</b><div class="meta">BMW 고객 전용 문구 · 오후 2시 발송 · 시점 3일 전부터 자동 문자 탭 목록에 올라와요</div></div>
+        <div class="tools"><button class="check" type="button" id="bmwTplBtn">문구 보기</button><button class="check" type="button" id="bmwCareOn" aria-pressed="true">켜짐</button></div></div>
+      <div id="bmwTplBody" class="fold-body" hidden>
+        <textarea class="sm-ta" id="bmwTa" rows="12"></textarea>
+        <div class="hint">{이름} → "홍길동 고객님", {차종} → 고객 차종 으로 바뀌어 들어가요.</div>
+        <div class="tools"><button class="btn primary" type="button" id="bmwTplSave">문구 저장</button><button class="btn ghost" type="button" id="bmwTplReset">기본 문구로</button></div>
+      </div>
+    </section>
+    <div class="filters"><input type="search" id="bq" placeholder="이름, 전화번호, 차종 검색" aria-label="BMW 고객 검색"></div>
+    <div id="bmwList" class="group"></div>
   </div>
   <div id="viewProfit" class="view" hidden>
     <div class="filters">
@@ -738,7 +765,7 @@ label.full{grid-column:1/-1}
   </div>
 
   <div id="viewLedger" class="view" hidden>
-  <div class="ledger-top"><b>출고 고객</b><button class="btn primary" id="addBtn" type="button">+ 출고 고객 등록</button></div>
+  <div class="ledger-top"><b>출고 고객(현대)</b><button class="btn primary" id="addBtn" type="button">+ 출고 고객 등록</button></div>
   <div class="stats">
     <button class="stat" type="button" id="statAll"><div class="k">전체 출고</div><div class="v" id="vAll">–</div></button>
     <button class="stat" type="button" id="statMonth"><div class="k">이번 달 출고</div><div class="v" id="vMonth">–</div></button>
@@ -2544,7 +2571,7 @@ function renderProfit(){
 $("pYear").addEventListener("change",renderProfit);
 function showTab(t){
   if(["profit","pe","calc","fin"].includes(t) && !unlocked) t="ledger";
-  const map={cal:["viewCal","tabCal"],ps:["viewPS","tabPS"],ledger:["viewLedger","tabLedger"],alerts:["viewAlerts","tabAlerts"],care:["viewCare","tabCare"],sms:["viewSms","tabSms"],profit:["viewProfit","tabProfit"],calc:["viewCalc","tabCalc"],fin:["viewFin","tabFin"],pe:["viewPE","tabPE"]};
+  const map={cal:["viewCal","tabCal"],ps:["viewPS","tabPS"],ledger:["viewLedger","tabLedger"],bmw:["viewBmw","tabBmw"],alerts:["viewAlerts","tabAlerts"],care:["viewCare","tabCare"],sms:["viewSms","tabSms"],profit:["viewProfit","tabProfit"],calc:["viewCalc","tabCalc"],fin:["viewFin","tabFin"],pe:["viewPE","tabPE"]};
   Object.entries(map).forEach(([k,[v,b]])=>{ $(v).hidden = k!==t; $(b).setAttribute("aria-selected", k===t); });
   currentTab=t;
   if(t==="sms" && typeof smsLoad==="function") smsLoad(true);
@@ -2578,6 +2605,7 @@ if(location.hash==="#ps") showTab("ps");
 if(location.hash==="#alerts") showTab("alerts");
 if(location.hash==="#care") showTab("care");
 if(location.hash==="#sms") showTab("sms");
+if(location.hash==="#bmw") showTab("bmw");
 
 // --- 엑셀(xlsx) 전체 저장
 function loadXLSX(){
@@ -3117,12 +3145,15 @@ function smsWanted(){
       });
     }
   });
-  return out.concat(holWanted());
+  return out.concat(holWanted(), bmwWanted());
 }
-const smsKeyCust=k=>{ const m=String(k||"").match(/^c:(.+?):(m\d+|ins\d+:[^#]+|hol:[^#]+)(#\d+)?$/); return m?m[1]:null; };
+const smsKeyCust=k=>{ const m=String(k||"").match(/^[cb]:(.+?):(m\d+|ins\d+:[^#]+|hol:[^#]+|q:[^#]+)(#\d+)?$/); return m?m[1]:null; };
+// 키 앞자리로 어느 명단인지: c: = 출고 고객(현대), b: = 출고 고객(BMW)
+const smsKeyList=k=>String(k||"").startsWith("b:")?bmw:all;
+const smsKeyCol=k=>String(k||"").startsWith("b:")?bmwCol:col;
 function smsScheduleSync(ms){ clearTimeout(smsSyncT); smsSyncT=setTimeout(smsSync, ms??3000); }
 async function smsSync(){
-  if(!gmcp||!loaded||!holLoaded||smsSyncing) return;
+  if(!gmcp||!loaded||!holLoaded||!bmwLoaded||smsSyncing) return;
   if(!all.length) { await smsLoad(); return; }
   smsSyncing=true;
   try{
@@ -3133,11 +3164,11 @@ async function smsSync(){
       await sbSql(`insert into public.sms_queue (key,customer_id,name,phone,kind,label,body,send_at) values ${vals} on conflict (key) do nothing`);
     }
     // 2) 예약된 문자: 고객 정보가 바뀌었으면 내용 갱신 / 더 이상 보낼 필요 없으면 취소
-    const sch=await sbSql("select id,key,name,phone,body,send_at,edited from public.sms_queue where status='scheduled' and key like 'c:%'");
+    const sch=await sbSql("select id,key,name,phone,body,send_at,edited from public.sms_queue where status='scheduled' and (key like 'c:%' or key like 'b:%')");
     for(const q of sch){
       const w=wantMap.get(q.key);
       if(!w){
-        const r=all.find(x=>x.id===smsKeyCust(q.key));
+        const r=smsKeyList(q.key).find(x=>x.id===smsKeyCust(q.key));
         const why=!r?"고객이 삭제됨":r.smsOff?"이 고객 자동 문자 꺼짐":!smsRecipients(r).length?"전화번호 없음":/:hol:/.test(q.key)?"명절 인사 꺼짐·날짜 지남":"연락 완료로 체크됨·날짜 변경";
         await sbSql(`update public.sms_queue set status='canceled', note=${sqlq(why)}, updated_at=now() where id=${sqlq(q.id)} and status='scheduled'`);
         continue;
@@ -3202,7 +3233,7 @@ function smsCard(q){
     ? `<span class="confirm">이 기록을 지울까요?</span><button class="btn danger" type="button" data-sms-del="${q.id}">삭제</button><button class="btn ghost" type="button" data-sms-askx="1">취소</button>`
     : `<button class="btn ghost danger" type="button" data-sms-ask="del:${q.id}">삭제</button>`);
   if(cid && ["scheduled","failed"].includes(q.status)) tools.push(smsAsk===("off:"+q.id)
-    ? `<span class="confirm">이 고객에게는 앞으로 자동 문자를 안 보낼까요?</span><button class="btn danger" type="button" data-sms-off="${esc(cid)}">끄기</button><button class="btn ghost" type="button" data-sms-askx="1">취소</button>`
+    ? `<span class="confirm">이 고객에게는 앞으로 자동 문자를 안 보낼까요?</span><button class="btn danger" type="button" data-sms-off="${esc(q.key)}">끄기</button><button class="btn ghost" type="button" data-sms-askx="1">취소</button>`
     : `<button class="btn ghost" type="button" data-sms-ask="off:${q.id}">이 고객 자동 문자 끄기</button>`);
   return `<article class="smscard st-${stCls}">
     <div class="sm-top"><div style="min-width:0"><b>${SMS_KIND[q.kind]||"✉️"} ${esc(q.name||(q.kind==="callback"?smsPhoneFmt(q.phone||""):"(이름 없음)"))}</b><span class="status ${stCls==="done"?"done":"need"} ${stCls}">${stTxt}</span>${q.edited&&!["test","callback"].includes(q.kind)?'<span class="badge ex">직접 수정</span>':""}${q.media_id?'<span class="badge ex">📷 사진</span>':""}
@@ -3240,9 +3271,9 @@ function renderSms(){
   if(smsFilter==="fail"){ list=failed; empty="실패한 문자가 없어요."; }
   if(smsFilter==="off"){ list=canceled; empty="보내지 않기로 한 문자가 없어요."; }
   $("smsList").innerHTML = smsState!=="ok" ? "" : list.length ? list.map(smsCard).join("") : `<div class="empty">${empty}</div>`;
-  const offs=all.filter(r=>r.smsOff);
+  const offs=all.filter(r=>r.smsOff).map(r=>({r,k:"c:"+r.id})).concat(bmw.filter(r=>r.smsOff).map(r=>({r,k:"b:"+r.id})));
   renderHol(); if(typeof renderCb==="function") renderCb();
-  $("smsOffList").innerHTML = offs.length ? `<span class="meta">자동 문자 끈 고객:</span> ${offs.map(r=>`<button class="chip" type="button" data-sms-on="${esc(r.id)}" title="다시 켜기">${esc(r.name||"(이름 없음)")} ✕</button>`).join(" ")}` : "";
+  $("smsOffList").innerHTML = offs.length ? `<span class="meta">자동 문자 끈 고객:</span> ${offs.map(o=>`<button class="chip" type="button" data-sms-on="${esc(o.k)}" title="다시 켜기">${esc(o.r.name||"(이름 없음)")}${o.k.startsWith("b:")?" (BMW)":""} ✕</button>`).join(" ")}` : "";
 }
 async function smsDo(q, msg){ try{ await sbSql(q); if(msg) toast(msg); }catch(err){ toast(err&&err.code?ibErrText(err):"처리하지 못했어요. 잠시 후 다시 시도해 주세요."); } await smsLoad(true); }
 document.querySelectorAll("[data-sf]").forEach(b=>b.onclick=()=>{ smsFilter=b.dataset.sf; renderSms(); });
@@ -3270,8 +3301,8 @@ $("viewSms").addEventListener("click",async e=>{
   if(d.smsAsk){ smsAsk=d.smsAsk; renderSms(); return; }
   if(d.smsDel){ smsAsk=null; await smsDo(`update public.sms_queue set hidden=true where id=${sqlq(d.smsDel)} and status in ('sent','canceled')`,"삭제했어요."); return; }
   if(d.smsAskx){ smsAsk=null; renderSms(); return; }
-  if(d.smsOff && col){ smsAsk=null; try{ await col.doc(d.smsOff).update({smsOff:true}); toast("이 고객 자동 문자를 껐어요."); }catch(_){ toast("저장하지 못했어요."); } smsScheduleSync(500); return; }
-  if(d.smsOn && col){ try{ await col.doc(d.smsOn).update({smsOff:false}); toast("자동 문자를 다시 켰어요."); }catch(_){ toast("저장하지 못했어요."); } smsScheduleSync(500); return; }
+  if(d.smsOff && smsKeyCol(d.smsOff)){ smsAsk=null; try{ await smsKeyCol(d.smsOff).doc(smsKeyCust(d.smsOff)).update({smsOff:true}); toast("이 고객 자동 문자를 껐어요."); }catch(_){ toast("저장하지 못했어요."); } smsScheduleSync(500); return; }
+  if(d.smsOn && smsKeyCol(d.smsOn)){ try{ await smsKeyCol(d.smsOn).doc(d.smsOn.slice(2)).update({smsOff:false}); toast("자동 문자를 다시 켰어요."); }catch(_){ toast("저장하지 못했어요."); } smsScheduleSync(500); return; }
 });
 
 
@@ -3455,6 +3486,135 @@ function applyFold(){
 document.querySelectorAll("[data-fold]").forEach(b=>b.onclick=()=>{ const k=b.dataset.fold; foldOpen[k]=!foldOpen[k]; try{ localStorage.setItem("smsFold",JSON.stringify(foldOpen)); }catch(_){} applyFold(); });
 applyFold();
 
+
+// ===== 출고 고객(BMW): BMW 근무 시절 출고 고객 명단. 자동 문자는 명절·새해·크리스마스 인사 + 3개월마다 안부만 =====
+let bmwCol=null, bmw=[], bmwLoaded=false, bmwEditId=null, bmwAsk=null, bmwSet={}, bmwTplOpen=false;
+const BMW_TEXT=`안녕하세요 {이름} 😊\n예전에 BMW에서 인연 맺었던 이성훈입니다.\n\n{차종} 잘 타고 계시죠?\n요즘 날씨가 자주 바뀌어서 안부 겸 연락드렸어요.\n\n저는 지금 현대자동차 신대치대리점에서 차장으로 일하고 있어요.\n차 관련해서 궁금하신 거나 정비·보험처럼 도움 필요하신 일 있으면 언제든 편하게 연락 주세요.\n\n늘 건강하시고 좋은 일만 가득하시길 바랄게요 🙏\n\n${MSG_SIGN}`;
+const bmwOn=()=>bmwSet.on!==false;
+const bmwText=()=>bmwSet.text||BMW_TEXT;
+// 3개월마다 안부: 출고일(없으면 등록일) 기준으로 3·6·9·12…개월째 되는 날
+function bmwNextCare(r){
+  const base=/^\d{4}-\d{2}-\d{2}$/.test(r.deliveredAt||"")?r.deliveredAt:String(r.createdAt||"").slice(0,10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(base)) return null;
+  const lo=smsAddDays(todayStr(),-7);
+  for(let k=1;k<400;k++){ const d=dstr(addMonths(base,k*3)); if(d>=lo) return d; }
+  return null;
+}
+// 명절 인사와 7일 안쪽으로 겹치면 그 분기 안부는 건너뜀
+function bmwNearHoliday(d){
+  return HOL_DEF.some(h=>{ if(!holOn(h.id)) return false; const n=holNext(h); if(!n) return false;
+    const a=new Date(d), b=new Date(n.send); return Math.abs(a-b)<=7*86400000; });
+}
+function bmwBody(r){ return bmwText().replace(/\{이름\}/g,msgName(r)).replace(/\{차종\}/g,msgCar(r)).replace(/\{서명\}/g,MSG_SIGN); }
+// smsWanted()에 더해짐
+function bmwWanted(){
+  if(!bmwLoaded) return [];
+  const out=[], t=todayStr(), lo=smsAddDays(t,-7), hi=smsAddDays(t,3), hiHol=smsAddDays(t,7);
+  bmw.forEach(r=>{
+    if(r.smsOff) return;
+    const rc=smsRecipients(r); if(!rc.length) return;
+    if(bmwOn()){
+      const d=bmwNextCare(r);
+      if(d && d>=lo && d<=hi && !bmwNearHoliday(d))
+        rc.forEach(p=>out.push({key:`b:${r.id}:q:${d}${p.sfx}`, cid:r.id, name:p.name, phone:p.phone, kind:"care", label:"BMW 고객 3개월 안부", date:d, body:bmwBody(p.r)}));
+    }
+    HOL_DEF.forEach(h=>{
+      if(!holOn(h.id)) return;
+      const n=holNext(h); if(!n || n.send>hiHol) return;
+      rc.forEach(p=>out.push({key:`b:${r.id}:hol:${h.id}${n.year}${p.sfx}`, cid:r.id, name:p.name, phone:p.phone, kind:"hol", label:`${h.name} 인사 (BMW)`, date:n.send, body:holBody(h,p.r,n)}));
+    });
+  });
+  return out;
+}
+function bmwRow(r){
+  const nx=bmwNextCare(r), editing=bmwEditId===r.id;
+  if(editing) return bmwFormHTML(r);
+  return `<article class="bmw-row">
+    <div class="who" style="min-width:0"><b>${esc(r.name||"(이름 없음)")}</b><span class="badge ref">⭐ BMW</span>${r.smsOff?'<span class="badge ex">자동 문자 끔</span>':""}
+      ${r.phone?`<div class="phone mono">${esc(r.phone)} <button class="copy" type="button" data-copy="${esc(r.phone)}">복사</button></div>`:'<div class="meta">번호 없음</div>'}</div>
+    <div style="min-width:0"><div class="car">${esc(r.model||"차종 미입력")}</div>${r.memo?`<div class="meta">${esc(r.memo)}</div>`:""}</div>
+    <div class="dates"><span>출고</span><span class="mono">${fmt(r.deliveredAt)}</span><span>다음 안부</span><span class="mono">${nx?fmt(nx):"–"}</span></div>
+    <div class="tools"><button class="btn" type="button" data-bmw-edit="${esc(r.id)}">수정</button></div>
+  </article>`;
+}
+function bmwFormHTML(r){
+  r=r||{};
+  const isNew=!r.id, del=r.id&&bmwAsk===("del:"+r.id);
+  return `<article class="bmw-row bmw-form">
+    <fieldset><legend>${isNew?"BMW 출고 고객 추가":"BMW 출고 고객 수정"}</legend>
+      <label>이름<input id="bf_name" value="${esc(r.name||"")}" placeholder="예: 홍길동(김영희)"></label>
+      <label>전화번호<input id="bf_phone" value="${esc(r.phone||"")}" inputmode="tel" placeholder="010-0000-0000 (여러 개면 괄호로)"></label>
+      <label>차종<input id="bf_model" value="${esc(r.model||"")}" placeholder="예: BMW 520i"></label>
+      <label>출고일<input id="bf_date" value="${esc(r.deliveredAt||"")}" placeholder="예: 2021-05-03 (모르면 비워두세요)"></label>
+      <label class="full">메모<input id="bf_memo" value="${esc(r.memo||"")}" placeholder="짧게"></label>
+      <label class="full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="bf_off" ${r.smsOff?"checked":""}> 이 고객에게는 자동 문자 보내지 않기</label>
+    </fieldset>
+    <div class="tools"><button class="btn primary" type="button" data-bmw-save="${esc(r.id||"")}">저장</button><button class="btn ghost" type="button" data-bmw-cancel="1">취소</button>
+      ${isNew?"":del?`<span class="confirm">정말 삭제할까요?</span><button class="btn danger" type="button" data-bmw-del="${esc(r.id)}">삭제</button>`:`<button class="btn ghost danger" type="button" data-bmw-ask="del:${esc(r.id)}">삭제</button>`}</div>
+  </article>`;
+}
+function renderBmw(){
+  if(!$("bmwList")) return;
+  $("bmwTotal").textContent=bmwLoaded?bmw.length:"–";
+  const q=($("bq").value||"").trim().toLowerCase();
+  const list=bmw.filter(r=>!q||[r.name,r.phone,r.model,r.memo].join(" ").toLowerCase().includes(q)).sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ko"));
+  let html = bmwEditId==="new" ? bmwFormHTML(null) : "";
+  html += !bmwLoaded ? `<div class="empty">불러오는 중…</div>` : list.length ? list.map(bmwRow).join("") : `<div class="empty">${bmw.length?"검색 결과가 없어요.":"아직 BMW 출고 고객이 없어요. \"+ 고객 추가\"나 \"여러 명 붙여넣기\"로 넣어 주세요."}</div>`;
+  $("bmwList").innerHTML=html;
+  // 3개월 안부 설정 박스
+  const on=bmwOn(), sw=$("bmwCareOn"); sw.setAttribute("aria-pressed",on); sw.textContent=on?"켜짐":"꺼짐";
+  $("bmwTplBody").hidden=!bmwTplOpen; $("bmwTplBtn").textContent=bmwTplOpen?"닫기":"문구 보기";
+  if(bmwTplOpen && !$("bmwTa").dataset.init){ $("bmwTa").value=bmwText(); $("bmwTa").dataset.init="1"; }
+  if(!bmwTplOpen) delete $("bmwTa").dataset.init;
+}
+async function bmwSaveSet(patch){
+  try{ await settingsCol.doc("smsBmw").set(Object.assign({},bmwSet,patch,{updatedAt:new Date().toISOString()})); return true; }
+  catch(_){ toast("저장하지 못했어요."); return false; }
+}
+$("bq").addEventListener("input",renderBmw);
+$("bmwAdd").onclick=()=>{ bmwEditId="new"; renderBmw(); const f=$("bf_name"); if(f) f.focus(); };
+$("bmwPasteBtn").onclick=()=>{ $("bmwPaste").hidden=!$("bmwPaste").hidden; };
+$("bmwCareOn").onclick=async()=>{ if(await bmwSaveSet({on:!bmwOn()})){ toast(bmwOn()?"3개월 안부를 껐어요.":"3개월 안부를 켰어요."); smsScheduleSync(800); } };
+$("bmwTplBtn").onclick=()=>{ bmwTplOpen=!bmwTplOpen; renderBmw(); };
+$("bmwTplSave").onclick=async()=>{ const t=($("bmwTa").value||"").trim(); if(!t){ toast("문구가 비어 있어요."); return; } if(await bmwSaveSet({text:t})){ toast("문구를 저장했어요."); smsScheduleSync(800); } };
+$("bmwTplReset").onclick=async()=>{ if(await bmwSaveSet({text:null})){ $("bmwTa").value=BMW_TEXT; toast("기본 문구로 돌렸어요."); smsScheduleSync(800); } };
+// 여러 명 붙여넣기: 한 줄에 한 명 "이름, 번호, 차종, 출고일" (쉼표나 탭으로 구분, 번호·출고일은 순서 상관없이 알아봄)
+$("bmwPasteSave").onclick=async()=>{
+  if(!bmwCol) return;
+  const lines=($("bmwPasteTa").value||"").split(/\n/).map(x=>x.trim()).filter(Boolean);
+  const rows=[];
+  for(const ln of lines){
+    const parts=ln.split(/\s*[,\t]\s*/).filter(Boolean);
+    const r={name:"",phone:"",model:"",deliveredAt:"",memo:""}, rest=[];
+    parts.forEach(p=>{ if(/01\d[\s-]?\d{3,4}[\s-]?\d{4}/.test(p)) r.phone=r.phone?r.phone+" ("+p+")":p; else if(normDate(p)) r.deliveredAt=normDate(p); else rest.push(p); });
+    r.name=rest[0]||""; r.model=rest[1]||""; r.memo=rest.slice(2).join(" ");
+    if(r.name||r.phone) rows.push(r);
+  }
+  if(!rows.length){ toast("넣을 고객을 찾지 못했어요. 한 줄에 한 명씩 써 주세요."); return; }
+  const now=new Date().toISOString(); let n=0;
+  for(const r of rows){ try{ await bmwCol.add(Object.assign(r,{createdAt:now,updatedAt:now})); n++; }catch(_){} }
+  $("bmwPasteTa").value=""; $("bmwPaste").hidden=true; toast(`${n}명을 넣었어요.`);
+};
+$("bmwList").addEventListener("click",async e=>{
+  const b=e.target.closest("button"); if(!b) return; const d=b.dataset;
+  if(d.copy){ try{ await navigator.clipboard.writeText(d.copy); toast("전화번호를 복사했어요."); }catch(_){ toast("복사하지 못했어요."); } return; }
+  if(d.bmwEdit){ bmwEditId=d.bmwEdit; bmwAsk=null; renderBmw(); return; }
+  if(d.bmwCancel){ bmwEditId=null; bmwAsk=null; renderBmw(); return; }
+  if(d.bmwAsk){ bmwAsk=d.bmwAsk; renderBmw(); return; }
+  if(d.bmwDel!==undefined && bmwCol){ try{ await bmwCol.doc(d.bmwDel).delete(); toast("삭제했어요."); }catch(_){ toast("삭제하지 못했어요."); } bmwEditId=null; bmwAsk=null; smsScheduleSync(800); return; }
+  if(d.bmwSave!==undefined && bmwCol){
+    const data={name:$("bf_name").value.trim(), phone:$("bf_phone").value.trim(), model:$("bf_model").value.trim(), deliveredAt:normDate($("bf_date").value)||"", memo:$("bf_memo").value.trim(), smsOff:$("bf_off").checked, updatedAt:new Date().toISOString()};
+    if(!data.name&&!data.phone){ toast("이름이나 전화번호를 넣어 주세요."); return; }
+    if($("bf_date").value.trim()&&!data.deliveredAt){ toast("출고일 형식을 확인해 주세요. 예: 2021-05-03"); return; }
+    b.disabled=true;
+    try{
+      if(d.bmwSave){ const old=bmw.find(x=>x.id===d.bmwSave)||{}; await bmwCol.doc(d.bmwSave).set(Object.assign({createdAt:old.createdAt||data.updatedAt},data)); }
+      else await bmwCol.add(Object.assign({createdAt:data.updatedAt},data));
+      bmwEditId=null; toast("저장했어요."); smsScheduleSync(800);
+    }catch(_){ toast("저장하지 못했어요."); b.disabled=false; }
+  }
+});
+
 // --- boot
 render();
 (async()=>{
@@ -3476,6 +3636,9 @@ render();
   extraCol = db.collection("extraIncome");
   extraCol.onSnapshot(snap=>{ extras = snap.docs.map(d=>Object.assign({id:d.id},d.data())); renderExtra(); renderProfit(); }, ()=>{});
   settingsCol.doc("inbox").onSnapshot(snap=>{ const d=snap.exists?snap.data():null; ibAutoOn = !(d && d.auto===false); if(pKind==="inbox") ibRender(); }, ()=>{});
+  bmwCol = db.collection("bmwCustomers");
+  bmwCol.onSnapshot(snap=>{ bmw=snap.docs.map(d=>Object.assign({id:d.id},d.data())); bmwLoaded=true; renderBmw(); if(typeof renderSms==="function") renderSms(); smsScheduleSync(); }, ()=>{ bmwLoaded=true; renderBmw(); });
+  settingsCol.doc("smsBmw").onSnapshot(snap=>{ bmwSet = snap.exists ? (snap.data()||{}) : {}; renderBmw(); smsScheduleSync(); }, ()=>{});
   settingsCol.doc("smsHoliday").onSnapshot(snap=>{ smsHol = snap.exists ? (snap.data()||{}) : {}; holLoaded=true; renderHol(); smsScheduleSync(); }, ()=>{ holLoaded=true; renderHol(); });
   settingsCol.doc("finance").onSnapshot(snap=>{ finDoc = snap.exists ? snap.data() : null; renderFin(); }, ()=>{});
   ratesCol.onSnapshot(snap=>{ rateDocs={}; snap.docs.forEach(d=>{ rateDocs[d.id]=d.data(); }); renderCalc(); }, ()=>{});
