@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 사진 문자(MMS) 메시지 파일을 통신사 MMS 서비스가 읽을 수 있게 공유하는 폴더 -->
+<paths>
+    <cache-path name="mms" path="mms/" />
+</paths>

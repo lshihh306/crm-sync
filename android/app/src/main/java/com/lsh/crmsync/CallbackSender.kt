@@ -69,7 +69,11 @@ object CallbackSender {
             val res = SmsSender.call(prefs, JSONObject().put("action", "callback").put("type", kind).put("phone", num).put("name", name)) ?: continue
             if (!res.optBoolean("send")) continue
             val id = res.getString("id"); val text = res.getString("body")
-            val err = try { SmsSender.send(ctx, num, text) } catch (t: Throwable) { "앱 오류: ${t.javaClass.simpleName}" }
+            val img = res.optString("image").takeIf { it.isNotBlank() && it != "null" }
+            val err = try {
+                if (img != null) SmsSender.sendMms(ctx, num, text, android.util.Base64.decode(img, android.util.Base64.DEFAULT), res.optString("image_mime", "image/jpeg"))
+                else SmsSender.send(ctx, num, text)
+            } catch (t: Throwable) { "앱 오류: ${t.javaClass.simpleName}" }
             val label = mapOf("after" to "통화 후", "missed" to "부재중", "rejected" to "거절")[kind]
             prefs.log(if (err == null) "📨 콜백 문자 보냄($label) · ${name.ifBlank { num }}" else "⚠️ 콜백 문자 실패 · ${name.ifBlank { num }} · $err")
             val one = JSONArray().put(JSONObject().put("id", id).put("ok", err == null).apply { if (err != null) put("error", err) })

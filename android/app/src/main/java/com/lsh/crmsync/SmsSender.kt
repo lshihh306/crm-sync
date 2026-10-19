@@ -98,7 +98,10 @@ object SmsSender {
             val err: String? = try {
                 val phone = it.optString("phone").filter { c -> c.isDigit() }
                 val text = it.optString("body")
-                if (phone.length < 10 || text.isBlank()) "전화번호나 문구가 비어 있어요" else send(ctx, phone, text)
+                val img = it.optString("image").takeIf { s -> s.isNotBlank() && s != "null" }
+                if (phone.length < 10 || text.isBlank()) "전화번호나 문구가 비어 있어요"
+                else if (img != null) sendMms(ctx, phone, text, android.util.Base64.decode(img, android.util.Base64.DEFAULT), it.optString("image_mime", "image/jpeg"))
+                else send(ctx, phone, text)
             } catch (t: Throwable) {
                 "앱 오류: ${t.javaClass.simpleName} ${t.message ?: ""}".take(200)
             }
@@ -140,6 +143,44 @@ object SmsSender {
             return if (fails.isEmpty()) null else "통신사 발송 실패 (코드 ${fails.first()}) · 신호나 요금제를 확인해 주세요"
         } catch (e: Exception) {
             return "발송 오류: ${e.message ?: e.javaClass.simpleName}"
+        } finally {
+            try { ctx.applicationContext.unregisterReceiver(rcv) } catch (_: Exception) {}
+        }
+    }
+
+    /** 사진 문자(MMS). @return null이면 성공, 아니면 실패 사유 */
+    fun sendMms(ctx: Context, phone: String, text: String, image: ByteArray, mime: String): String? {
+        val sms: SmsManager = if (Build.VERSION.SDK_INT >= 31) ctx.getSystemService(SmsManager::class.java)
+            else @Suppress("DEPRECATION") SmsManager.getDefault()
+        val dir = java.io.File(ctx.cacheDir, "mms").apply { mkdirs() }
+        // 오래된 메시지 파일 정리
+        dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 3600_000 }?.forEach { it.delete() }
+        val f = java.io.File(dir, "send_${System.nanoTime()}.pdu")
+        f.writeBytes(MmsPdu.build(phone, text, image, mime.ifBlank { "image/jpeg" }))
+        val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.mms", f)
+        // 통신사 MMS 서비스가 이 파일을 읽을 수 있게 허용
+        for (pkg in listOf("com.android.phone", "com.android.mms.service", "com.samsung.android.messaging")) {
+            try { ctx.grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+        }
+        val latch = CountDownLatch(1)
+        var code = 0
+        val tag = "mms" + System.nanoTime()
+        val rcv = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                if (i.getStringExtra("tag") != tag) return
+                code = resultCode; latch.countDown()
+            }
+        }
+        try {
+            ContextCompat.registerReceiver(ctx.applicationContext, rcv, IntentFilter(ACTION_SENT), ContextCompat.RECEIVER_NOT_EXPORTED)
+            val pi = PendingIntent.getBroadcast(ctx, reqCode.incrementAndGet(),
+                Intent(ACTION_SENT).setPackage(ctx.packageName).putExtra("tag", tag),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            sms.sendMultimediaMessage(ctx, uri, null, null, pi)
+            if (!latch.await(150, TimeUnit.SECONDS)) return "150초 안에 사진 문자 결과가 오지 않았어요 (메시지 앱에서 확인해 주세요)"
+            return if (code == android.app.Activity.RESULT_OK) null else "사진 문자 발송 실패 (코드 $code) · 모바일 데이터가 켜져 있는지 확인해 주세요"
+        } catch (e: Exception) {
+            return "사진 문자 오류: ${e.message ?: e.javaClass.simpleName}"
         } finally {
             try { ctx.applicationContext.unregisterReceiver(rcv) } catch (_: Exception) {}
         }

@@ -68,6 +68,17 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- 사진 문자(MMS) 메시지 파일 공유 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.mms"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/mms_paths" />
+        </provider>
+
         <receiver
             android:name=".BootReceiver"
             android:exported="true">
