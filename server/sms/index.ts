@@ -42,21 +42,25 @@ Deno.serve(async (req) => {
     const phone = String(body.phone ?? "").replace(/\D/g, "");
     if (!/^01\d{8,9}$/.test(phone)) return json({ send: false, reason: "휴대폰 번호 아님" });
     const { data: st } = await db.from("sms_settings").select("callback").eq("id", 1).single();
-    const cb = (st?.callback ?? {}) as Record<string, { on?: boolean; text?: string; image?: string } | boolean>;
-    const conf = cb[type] as { on?: boolean; text?: string; image?: string } | undefined;
+    type Conf = { on?: boolean; text?: string; image?: string; image2?: string };
+    const cb = (st?.callback ?? {}) as Record<string, Conf | boolean>;
+    const conf = cb[type] as Conf | undefined;
     if (cb.on === false || !conf || conf.on === false || !conf.text) return json({ send: false, reason: "꺼짐" });
     const labels: Record<string, string> = { after: "콜백 · 통화 후", missed: "콜백 · 부재중", rejected: "콜백 · 거절" };
     const label = labels[type] ?? "콜백";
     const now = new Date().toISOString();
     const { data: ins, error } = await db.from("sms_queue").upsert({
       key: "cb:" + phone, name: String(body.name ?? "").slice(0, 40) || null, phone, kind: "callback", label,
-      body: conf.text, send_at: now, status: "sending", claimed_at: now, edited: true, media_id: conf.image || null,
-    }, { onConflict: "key", ignoreDuplicates: true }).select("id, body, media_id");
+      body: conf.text, send_at: now, status: "sending", claimed_at: now, edited: true,
+      // 사진은 "통화 끝난 뒤"에만 (최대 2장). 부재중·거절은 글자 문자
+      media_id: type === "after" ? (conf.image || conf.image2 || null) : null,
+      media_id2: type === "after" && conf.image && conf.image2 ? conf.image2 : null,
+    }, { onConflict: "key", ignoreDuplicates: true }).select("id, body, media_id, media_id2");
     if (error) return json({ send: false, reason: error.message }, 500);
     if (!ins || !ins.length) return json({ send: false, reason: "이미 보낸 번호" });
-    const media = await mediaMap([ins[0].media_id]);
-    const img = ins[0].media_id ? media[ins[0].media_id] : undefined;
-    return json({ send: true, id: ins[0].id, body: ins[0].body, image: img?.data ?? null, image_mime: img?.mime ?? null });
+    const media = await mediaMap([ins[0].media_id, ins[0].media_id2]);
+    const images = [ins[0].media_id, ins[0].media_id2].filter((x) => x && media[x]).map((x) => media[x as string]);
+    return json({ send: true, id: ins[0].id, body: ins[0].body, images, image: images[0]?.data ?? null, image_mime: images[0]?.mime ?? null });
   }
 
   if (action === "report") {
@@ -95,8 +99,11 @@ Deno.serve(async (req) => {
   const { data: claimed } = await db.from("sms_queue")
     .update({ status: "sending", claimed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .in("id", due.map((d) => d.id)).eq("status", "scheduled")
-    .select("id, phone, body, name, label, media_id");
-  const media = await mediaMap((claimed ?? []).map((c) => c.media_id));
-  const items = (claimed ?? []).map((c) => ({ ...c, image: c.media_id ? media[c.media_id]?.data ?? null : null, image_mime: c.media_id ? media[c.media_id]?.mime ?? null : null }));
+    .select("id, phone, body, name, label, media_id, media_id2");
+  const media = await mediaMap((claimed ?? []).flatMap((c) => [c.media_id, c.media_id2]));
+  const items = (claimed ?? []).map((c) => {
+    const images = [c.media_id, c.media_id2].filter((x) => x && media[x]).map((x) => media[x as string]);
+    return { ...c, images, image: images[0]?.data ?? null, image_mime: images[0]?.mime ?? null };
+  });
   return json({ enabled, items });
 });

@@ -45,19 +45,25 @@ object MmsPdu {
         else -> { val o = Out(); o.text(mime); o.toByteArray() }
     }
 
-    fun build(to: String, text: String, image: ByteArray?, imageMime: String = "image/jpeg"): ByteArray {
-        val ext = when (imageMime.lowercase()) { "image/png" -> "png"; "image/gif" -> "gif"; else -> "jpg" }
+    /** images: (사진 바이트, mime) 최대 2장 정도. 사진마다 한 장면(par), 글은 첫 장면에 */
+    fun build(to: String, text: String, images: List<Pair<ByteArray, String>>): ByteArray {
+        fun ext(m: String) = when (m.lowercase()) { "image/png" -> "png"; "image/gif" -> "gif"; else -> "jpg" }
         val parts = ArrayList<Pair<ByteArray, ByteArray>>()
         val smil = buildString {
             append("<smil><head><layout><root-layout/>")
-            if (image != null) append("<region id=\"Image\" top=\"0\" left=\"0\" height=\"70%\" width=\"100%\" fit=\"meet\"/>")
+            if (images.isNotEmpty()) append("<region id=\"Image\" top=\"0\" left=\"0\" height=\"70%\" width=\"100%\" fit=\"meet\"/>")
             append("<region id=\"Text\" top=\"70%\" left=\"0\" height=\"30%\" width=\"100%\" fit=\"scroll\"/>")
-            append("</layout></head><body><par dur=\"8000ms\">")
-            if (image != null) append("<img src=\"image.$ext\" region=\"Image\"/>")
-            append("<text src=\"text.txt\" region=\"Text\"/></par></body></smil>")
+            append("</layout></head><body>")
+            if (images.isEmpty()) append("<par dur=\"8000ms\"><text src=\"text.txt\" region=\"Text\"/></par>")
+            images.forEachIndexed { i, (_, m) ->
+                append("<par dur=\"8000ms\"><img src=\"image${i + 1}.${ext(m)}\" region=\"Image\"/>")
+                if (i == 0) append("<text src=\"text.txt\" region=\"Text\"/>")
+                append("</par>")
+            }
+            append("</body></smil>")
         }
         parts.add(part(ctSmil(), "smil", "smil.xml", smil.toByteArray(Charsets.UTF_8)))
-        if (image != null) parts.add(part(ctImage(imageMime), "image", "image.$ext", image))
+        images.forEachIndexed { i, (data, m) -> parts.add(part(ctImage(m), "image${i + 1}", "image${i + 1}.${ext(m)}", data)) }
         parts.add(part(ctText(), "text", "text.txt", text.toByteArray(Charsets.UTF_8)))
 
         val o = Out()

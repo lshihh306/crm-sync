@@ -98,9 +98,9 @@ object SmsSender {
             val err: String? = try {
                 val phone = it.optString("phone").filter { c -> c.isDigit() }
                 val text = it.optString("body")
-                val img = it.optString("image").takeIf { s -> s.isNotBlank() && s != "null" }
+                val imgs = images(it)
                 if (phone.length < 10 || text.isBlank()) "전화번호나 문구가 비어 있어요"
-                else if (img != null) sendMms(ctx, phone, text, android.util.Base64.decode(img, android.util.Base64.DEFAULT), it.optString("image_mime", "image/jpeg"))
+                else if (imgs.isNotEmpty()) sendMms(ctx, phone, text, imgs)
                 else send(ctx, phone, text)
             } catch (t: Throwable) {
                 "앱 오류: ${t.javaClass.simpleName} ${t.message ?: ""}".take(200)
@@ -148,15 +148,31 @@ object SmsSender {
         }
     }
 
+    /** 서버 응답에서 사진들 꺼내기: images:[{data,mime}] (예전 형식 image/image_mime도 받음) */
+    fun images(o: JSONObject): List<Pair<ByteArray, String>> {
+        val out = ArrayList<Pair<ByteArray, String>>()
+        val arr = o.optJSONArray("images")
+        if (arr != null) for (k in 0 until arr.length()) {
+            val m = arr.optJSONObject(k) ?: continue
+            val d = m.optString("data"); if (d.isBlank() || d == "null") continue
+            out.add(android.util.Base64.decode(d, android.util.Base64.DEFAULT) to m.optString("mime", "image/jpeg").ifBlank { "image/jpeg" })
+        }
+        if (out.isEmpty()) {
+            val d = o.optString("image")
+            if (d.isNotBlank() && d != "null") out.add(android.util.Base64.decode(d, android.util.Base64.DEFAULT) to o.optString("image_mime", "image/jpeg").ifBlank { "image/jpeg" })
+        }
+        return out
+    }
+
     /** 사진 문자(MMS). @return null이면 성공, 아니면 실패 사유 */
-    fun sendMms(ctx: Context, phone: String, text: String, image: ByteArray, mime: String): String? {
+    fun sendMms(ctx: Context, phone: String, text: String, images: List<Pair<ByteArray, String>>): String? {
         val sms: SmsManager = if (Build.VERSION.SDK_INT >= 31) ctx.getSystemService(SmsManager::class.java)
             else @Suppress("DEPRECATION") SmsManager.getDefault()
         val dir = java.io.File(ctx.cacheDir, "mms").apply { mkdirs() }
         // 오래된 메시지 파일 정리
         dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 3600_000 }?.forEach { it.delete() }
         val f = java.io.File(dir, "send_${System.nanoTime()}.pdu")
-        f.writeBytes(MmsPdu.build(phone, text, image, mime.ifBlank { "image/jpeg" }))
+        f.writeBytes(MmsPdu.build(phone, text, images))
         val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.mms", f)
         // 통신사 MMS 서비스가 이 파일을 읽을 수 있게 허용
         for (pkg in listOf("com.android.phone", "com.android.mms.service", "com.samsung.android.messaging")) {
