@@ -1,4 +1,7 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}.optbox{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:10px 0;display:flex;flex-direction:column;gap:8px}
+.optbox label{display:flex;flex-direction:column;gap:2px}
+.optrow{display:flex;gap:8px}.optrow input{flex:1;min-width:0;max-width:240px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--bg);color:var(--fg)}
+</style></head><body>
 <title>관리 시스템</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -565,6 +568,9 @@ label.full{grid-column:1/-1}
       <div style="display:flex;flex-direction:column;gap:4px;min-width:0"><div class="meta" id="smsPhone">불러오는 중…</div><div class="confirm" id="smsAskOn" hidden>켜면 보낼 시각이 지난 문자 <b id="smsAskN">0</b>건이 바로 나가요. 오른쪽 버튼을 한 번 더 누르면 켜져요. <button class="btn ghost" type="button" id="smsAskCancel">취소</button></div><div class="meta" id="smsOffNote" hidden>지금은 <b>꺼져 있어서</b> 목록만 만들어지고 실제로 나가진 않아요. 목록을 확인하고 켜 주세요.</div></div>
       <div class="actions"><button class="btn" id="smsTest" type="button">내 폰으로 테스트</button><button class="btn" id="smsRefresh" type="button">새로고침</button><button class="btn" id="smsSwitch" type="button" aria-pressed="false" disabled>자동 발송 꺼짐</button></div>
     </div>
+    <div class="optbox" id="optBox"><label for="optIn"><b>📵 무료수신거부 번호</b> <span class="meta">자동 문자(출고 감사·안부·보험·명절·BMW) 앞에 <b>(광고)</b>, 끝에 <b>무료수신거부 번호</b>가 자동으로 붙어요. 콜백 문자에는 안 붙어요.</span></label>
+      <div class="optrow"><input id="optIn" type="tel" inputmode="tel" placeholder="080-000-0000" autocomplete="off"><button class="btn primary" type="button" id="optSave">저장</button></div>
+      <div class="sm-err" id="optWarn" hidden>⚠ 수신거부 번호를 넣어야 자동 문자가 나가요. 넣기 전까지 자동 문자는 목록에서 기다려요 (콜백·테스트 문자는 그대로 나가요).</div></div>
     <section class="holbox" id="cbBox">
       <div class="hol-top"><button class="fold" type="button" data-fold="cb" aria-expanded="false" aria-controls="cbBody"><span class="chev" aria-hidden="true">▸</span><b>📨 콜백 문자</b><span class="meta" id="cbSum"></span></button>
         <div class="tools"><button class="check" type="button" id="cbMaster" aria-pressed="false">꺼짐</button></div></div>
@@ -3205,7 +3211,7 @@ async function smsSync(){
 async function smsLoad(quiet){
   if(!gmcp||smsBusy) return; smsBusy=true;
   try{
-    const [set]=await sbSql("select enabled, send_hour, app_seen_at, app_info, callback from public.sms_settings where id=1");
+    const [set]=await sbSql("select enabled, send_hour, app_seen_at, app_info, callback, optout from public.sms_settings where id=1");
     smsSet=set||{enabled:false};
     smsRows=await sbSql("select id,key,customer_id,name,phone,kind,label,body,send_at,status,edited,sent_at,error,note,updated_at,media_id from public.sms_queue where kind <> 'callback' and not hidden and (status in ('scheduled','sending','failed') or updated_at > now() - interval '30 days') order by send_at asc limit 500");
     smsState="ok"; smsErr="";
@@ -3227,6 +3233,13 @@ function smsAppOff(){
 }
 const SMS_ST={scheduled:["예정","need"],sending:["보내는 중","need"],sent:["보냄","done"],failed:["실패","fail"],canceled:["보내지 않음","off"]};
 const SMS_KIND={thanks:"🎉",care:"💬",ins:"📅",test:"🧪",manual:"✉️",hol:"💌",callback:"📨"};
+const SMS_AD=new Set(["thanks","care","ins","hol"]);
+function smsOptout(){ return String((smsSet&&smsSet.optout)||"").trim(); }
+function smsAdBody(q){
+  if(!SMS_AD.has(q.kind)) return q.body||"";
+  const b=String(q.body||"").replace(/^\s*\(광고\)\s*/,"").replace(/\n*무료수신거부[^\n]*\s*$/,"");
+  return `(광고) ${b}\n\n무료수신거부 ${smsOptout()||"080-○○○-○○○○"}`;
+}
 function smsCard(q){
   const [stTxt,stCls]=SMS_ST[q.status]||[q.status,""];
   const when = q.status==="sent" ? "보낸 시각 "+smsWhen(q.sent_at) : q.status==="scheduled" ? "보낼 시각 "+smsWhen(q.send_at) : "예정 "+smsWhen(q.send_at);
@@ -3247,7 +3260,7 @@ function smsCard(q){
       <div class="sm-when">${when}</div></div>
     ${q.error?`<div class="sm-err">⚠ ${esc(q.error)}</div>`:""}${q.status==="canceled"&&q.note?`<div class="meta">사유: ${esc(q.note)}</div>`:""}
     ${editing?`<textarea class="sm-ta" id="smsTa" rows="10">${esc(q.body)}</textarea><div class="tools"><button class="btn primary" type="button" data-sms-save="${q.id}">저장</button><button class="btn ghost" type="button" data-sms-editx="1">취소</button></div>`
-      :`<button class="sm-body${open?" open":""}" type="button" data-sms-open="${q.id}" aria-expanded="${open}">${esc(q.body)}</button>`}
+      :`<button class="sm-body${open?" open":""}" type="button" data-sms-open="${q.id}" aria-expanded="${open}">${esc(q.status==="sent"?q.body:smsAdBody(q))}</button>`}
     ${!editing&&tools.length?`<div class="tools">${tools.join("")}</div>`:""}
   </article>`;
 }
@@ -3269,6 +3282,8 @@ function renderSms(){
     : seen ? `📱 본폰 앱 마지막 연결 <b>${seen}</b>${smsAppOff()?' <span style="color:var(--danger)">· 폰 앱이 오래 연결되지 않았어요. 앱을 한 번 열어 주세요</span>':""}${/권한 없음/.test(smsSet.app_info||"")?` <span style="color:var(--danger)">· ⚠ ${esc((smsSet.app_info.match(/[^·]*권한 없음/g)||[]).map(x=>x.trim()).join(", "))} — 본폰 앱에서 권한을 허용해 주세요</span>`:""}`
     : `📱 본폰 앱이 아직 연결되지 않았어요. <b>상담 자동전송 앱(1.4.2 이상)</b>을 설치하고 문자 권한을 허용해 주세요`;
   $("smsOffNote").hidden=on||smsState!=="ok";
+  const oi=$("optIn"); if(oi && document.activeElement!==oi && smsState==="ok") oi.value=smsOptout();
+  $("optWarn").hidden=smsState!=="ok"||!!smsOptout();
   const nPast=smsRows.filter(q=>q.status==="scheduled"&&ibTime(q.send_at)<=Date.now()).length;
   $("smsAskOn").hidden=smsAsk!=="on"; $("smsAskN").textContent=nPast;
   let list=[], empty="";
@@ -3291,6 +3306,13 @@ $("smsSwitch").onclick=async()=>{
   }
   smsAsk=null;
   await smsDo(`update public.sms_settings set enabled=${on}, updated_at=now() where id=1`, on?"자동 발송을 켰어요. 매일 오후 2시에 본폰에서 나가요.":"자동 발송을 껐어요. 목록은 그대로 남아요.");
+};
+$("optSave").onclick=async()=>{
+  const v=($("optIn").value||"").replace(/[^\d-]/g,"").trim(), d=v.replace(/\D/g,"");
+  if(d && !/^080\d{7,8}$/.test(d)){ toast("080으로 시작하는 무료수신거부 번호를 넣어 주세요."); return; }
+  const f=d?(d.length===10?d.replace(/(\d{3})(\d{3})(\d{4})/,"$1-$2-$3"):d.replace(/(\d{3})(\d{4})(\d{4})/,"$1-$2-$3")):"";
+  $("optIn").blur();
+  await smsDo(`update public.sms_settings set optout=${f?sqlq(f):"null"}, updated_at=now() where id=1`, f?"수신거부 번호를 저장했어요. 자동 문자에 붙어서 나가요.":"수신거부 번호를 지웠어요. 자동 문자는 멈춰요.");
 };
 $("smsAskCancel").onclick=()=>{ smsAsk=null; renderSms(); };
 $("smsTest").onclick=()=>smsDo(`insert into public.sms_queue (key,name,phone,kind,label,body,send_at) values (${sqlq("test:"+Date.now())},'내 폰 테스트',${sqlq(SMS_MY)},'test','테스트 문자',${sqlq("자동 문자 테스트예요 😊\n이 문자가 잘 보이면 본폰 자동 발송이 정상이에요.\n\n"+MSG_SIGN)},now())`, "테스트 문자를 올렸어요. 본폰 앱이 가져가면 1~5분 안에 내 폰으로 와요.");

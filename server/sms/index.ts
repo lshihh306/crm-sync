@@ -15,6 +15,14 @@ const json = (body: unknown, status = 200) =>
 const kstHour = () => new Date(Date.now() + 9 * 3600 * 1000).getUTCHours();
 const SEND_FROM = 9, SEND_UNTIL = 21;
 
+// 자동 문자(안부·감사·보험·명절·BMW)는 광고성 정보로 보고 앞에 (광고), 끝에 무료수신거부 번호를 붙임. 콜백·테스트는 그대로
+const AD_KINDS = new Set(["thanks", "care", "ins", "hol"]);
+function adWrap(kind: string, body: string, optout: string) {
+  if (!AD_KINDS.has(kind)) return body;
+  const b = body.replace(/^\s*\(광고\)\s*/, "").replace(/\n*무료수신거부[^\n]*\s*$/, "");
+  return `(광고) ${b}\n\n무료수신거부 ${optout}`;
+}
+
 // 사진 문자: 사진 id들 → {id: {mime, data(base64)}}
 async function mediaMap(ids: (string | null | undefined)[]) {
   const want = [...new Set(ids.filter((x): x is string => !!x))];
@@ -92,7 +100,8 @@ Deno.serve(async (req) => {
   // 3시간 넘게 녹음 분석 결과가 없는 통화 후 콜백 대기는 정리 (녹음이 없던 통화 등)
   await db.from("callback_wait").update({ status: "expired", note: "통화 녹음 분석 결과가 없어 보내지 않음", decided_at: new Date().toISOString() })
     .eq("status", "waiting").lt("call_at", new Date(Date.now() - 3 * 3600000).toISOString());
-  const { data: set } = await db.from("sms_settings").select("enabled").eq("id", 1).single();
+  const { data: set } = await db.from("sms_settings").select("enabled, optout").eq("id", 1).single();
+  const optout = String(set?.optout ?? "").trim();
 
   // 폰이 가져간 뒤 30분 넘게 결과가 안 온 건 → 두 번 보내지 않도록 "실패(확인 필요)"로
   await db.from("sms_queue").update({
@@ -107,7 +116,7 @@ Deno.serve(async (req) => {
   let q = db.from("sms_queue").select("id")
     .eq("status", "scheduled").lte("send_at", new Date().toISOString());
   if (night) q = q.eq("kind", "callback");
-  else if (!enabled) q = q.in("kind", ["test", "callback"]);
+  else if (!enabled || !optout) q = q.in("kind", ["test", "callback"]); // 수신거부 번호가 없으면 자동 문자는 보내지 않고 기다림
   const { data: due } = await q.order("send_at", { ascending: true }).limit(30);
   if (!due || !due.length) return json({ enabled, items: [] });
 
@@ -115,11 +124,11 @@ Deno.serve(async (req) => {
   const { data: claimed } = await db.from("sms_queue")
     .update({ status: "sending", claimed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .in("id", due.map((d) => d.id)).eq("status", "scheduled")
-    .select("id, phone, body, name, label, media_id, media_id2");
+    .select("id, phone, body, name, label, kind, media_id, media_id2");
   const media = await mediaMap((claimed ?? []).flatMap((c) => [c.media_id, c.media_id2]));
   const items = (claimed ?? []).map((c) => {
     const images = [c.media_id, c.media_id2].filter((x) => x && media[x]).map((x) => media[x as string]);
-    return { ...c, images, image: images[0]?.data ?? null, image_mime: images[0]?.mime ?? null };
+    return { ...c, body: adWrap(c.kind, c.body, optout), images, image: images[0]?.data ?? null, image_mime: images[0]?.mime ?? null };
   });
   return json({ enabled, items });
 });
