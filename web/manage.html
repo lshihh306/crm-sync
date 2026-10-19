@@ -3232,7 +3232,7 @@ function renderSms(){
   const sw=$("smsSwitch"); sw.setAttribute("aria-pressed",on); sw.textContent=on?"자동 발송 켜짐":"자동 발송 꺼짐"; sw.disabled=smsState!=="ok";
   const seen=smsSet&&smsAgo(smsSet.app_seen_at);
   $("smsPhone").innerHTML = smsState==="wait" ? "불러오는 중…" : smsState==="err" ? `<span style="color:var(--danger)">${esc(smsErr)}</span>`
-    : seen ? `📱 본폰 앱 마지막 연결 <b>${seen}</b>${smsAppOff()?' <span style="color:var(--danger)">· 폰 앱이 오래 연결되지 않았어요. 앱을 한 번 열어 주세요</span>':""}`
+    : seen ? `📱 본폰 앱 마지막 연결 <b>${seen}</b>${smsAppOff()?' <span style="color:var(--danger)">· 폰 앱이 오래 연결되지 않았어요. 앱을 한 번 열어 주세요</span>':""}${/권한 없음/.test(smsSet.app_info||"")?` <span style="color:var(--danger)">· ⚠ ${esc((smsSet.app_info.match(/[^·]*권한 없음/g)||[]).map(x=>x.trim()).join(", "))} — 본폰 앱에서 권한을 허용해 주세요</span>`:""}`
     : `📱 본폰 앱이 아직 연결되지 않았어요. <b>상담 자동전송 앱(1.4.2 이상)</b>을 설치하고 문자 권한을 허용해 주세요`;
   $("smsOffNote").hidden=on||smsState!=="ok";
   const nPast=smsRows.filter(q=>q.status==="scheduled"&&ibTime(q.send_at)<=Date.now()).length;
