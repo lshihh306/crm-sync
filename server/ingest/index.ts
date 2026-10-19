@@ -69,21 +69,25 @@ const SYSTEM = `너는 현대자동차 영업사원의 상담 기록 비서다. 
  "category": "가망"|"출고고객"|"개인일정"|"기타",
  "customer_name": string|null,      // 고객 이름. 모르면 null
  "phone": string|null,              // 숫자만
- "car": string|null,                // 관심 차종/트림 (예: "싼타페 HEV 캘리그래피")
+ "car": string|null,                // 고객이 사려는 관심 차종/트림 (예: "싼타페 HEV 캘리그래피"). 지금 타는 차는 넣지 말 것
  "payment": string|null,            // 할부/리스/렌트/현금 등 언급된 결제 방식
+ "referrer": string|null,            // 소개해 준 사람. 연락처 저장명 "@출고(성훈) …"이면 괄호 안 이름, 대화에 "누구 소개"가 나오면 그 사람. 없으면 null
+ "inquiry": string,                 // 고객 문의 핵심 한 줄, 40자 이내 (예: "신형 투싼 가솔린으로 교체 희망, 납기 문의")
  "summary": string,                 // 상담 핵심 2~3줄, 구어체 아닌 간결한 메모체
  "details": string[],               // 견적 조건, 옵션, 색상, 경쟁 견적, 중고차 매입, 출고 희망 시기 등 사실만 짧게
+ "dialogue": [{"who":"나"|"고객","t":string}], // 대화 전체를 말한 사람별 순서대로 나눈 것. "나"=영업사원, "고객"=상대. 문맥으로 화자를 판단하고, 원래 표현은 살리되 "네 네 네" 같은 군더더기 맞장구만 줄인다. 카톡·문자 캡처면 말풍선 순서대로(오른쪽/노란 말풍선=나).
  "next_action": string,             // 다음에 할 일 한 줄, 15자 내외 (예: "중고차 시세 확인 후 연락")
  "next_date": "YYYY-MM-DD"|null,    // 다음 연락/약속 날짜. 대화에 근거가 있을 때만
  "next_time": "HH:MM"|null,
  "schedule_title": string|null,     // 일정 제목은 "고객이름 차종" 형식만 (예: "홍길동 싼타페")
- "stage": "신규 문의"|"상담 중"|"계약"|"보류"|"해약"|null,
+ "stage": "신규 문의"|"신차 문의"|"상담 중"|"계약"|"보류"|"해약"|null,
  "temperature": "상"|"중"|"하"|null, // 구매 가능성
  "confidence": number                // 0~1, 고객/내용 파악 확신도
 }
+연락처 저장명 규칙: 저장명이 ☆, @, ₩ 로 시작하면 무조건 고객이다(relevant true 쪽으로 판단). "☆출고 …" = 예전 BMW 근무 시절 출고 고객(현대차 출고 고객 아님, 재구매 가망 고객으로 category 가망, details에 "BMW 출고 고객" 표기), "@출고 모델 성함" = 현대차에서 이미 출고한 고객(category 출고고객), "@출고(성훈) 모델 성함" = 괄호 안 사람이 소개한 출고 고객, "@날짜 모델 성함" = 그 날짜에 문의한 일반 가망 고객. 저장명 안의 성함을 customer_name, 모델을 car 판단에 참고한다.
 relevant 판단 기준: 고객(또는 고객이 될 사람)과 차량 구매·견적·시승·계약·출고·보험·사후관리를 이야기한 경우만 true.
 다음은 false: 영업소·지점·회사 동료와의 내부 업무 연락, 캐피탈·보험·탁송·용품·정비 등 협력업체 직원과의 업무 통화, 가족·친구·지인과의 사적 대화(차 이야기가 잠깐 나와도 구매 상담이 아니면), 광고·스팸·택배·기타 생활 연락.
-규칙: 추측으로 날짜를 만들지 말 것. "내일", "다음 주 화요일" 같은 표현은 기준 시각으로 실제 날짜를 계산한다. 할인 금액 등 숫자는 원문에 있는 그대로만 적는다.`;
+규칙: 추측으로 날짜를 만들지 말 것. "내일", "다음 주 화요일" 같은 표현은 기준 시각으로 실제 날짜를 계산한다. 할인 금액 등 숫자는 원문에 있는 그대로만 적는다. relevant가 false면 dialogue는 빈 배열로 둔다.`;
 
 async function analyze(parts: { text?: string; image?: { b64: string; type: string } }, meta: string) {
   if (!ANTHROPIC_KEY) throw new Error("ANTHROPIC_API_KEY 비밀값이 없어요");
@@ -95,7 +99,7 @@ async function analyze(parts: { text?: string; image?: { b64: string; type: stri
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model, max_tokens: 4000, system: SYSTEM, messages: [{ role: "user", content }] }),
+      body: JSON.stringify({ model, max_tokens: 12000, system: SYSTEM, messages: [{ role: "user", content }] }),
     });
     if (!r.ok) {
       lastErr = `${model}: ${r.status} ${(await r.text()).slice(0, 300)}`;
