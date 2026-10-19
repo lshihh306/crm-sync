@@ -29,8 +29,8 @@ class MainActivity : AppCompatActivity() {
 
     private val perms: Array<String>
         get() = if (Build.VERSION.SDK_INT >= 33)
-            arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.SEND_SMS, Manifest.permission.READ_PHONE_STATE)
-        else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.SEND_SMS, Manifest.permission.READ_PHONE_STATE)
+            arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.SEND_SMS, Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG)
+        else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.SEND_SMS, Manifest.permission.READ_PHONE_STATE, Manifest.permission.READ_CALL_LOG)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -151,7 +151,18 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        section(root, "⑤ 수동 실행")
+        section(root, "⑤ 콜백 문자 (통화 후·부재중·거절)")
+        root.addView(TextView(this).apply {
+            text = "통화가 끝나거나, 부재중·거절이면 그 번호로 문자를 보내요. 같은 번호에는 평생 한 번만 나가요. 문구 수정과 종류별 켜고 끄기는 관리 시스템 '자동 문자' 탭에서 해요. 처음 켠 이후의 통화부터 적용돼요."
+            textSize = 12.5f
+        })
+        root.addView(sw("📨 콜백 문자 보내기", { prefs.callbackOn }) { prefs.callbackOn = it; if (it) WatchService.start(this) })
+        root.addView(Button(this).apply {
+            text = "통화기록 권한 허용"
+            setOnClickListener { requestPermissions(arrayOf(Manifest.permission.READ_CALL_LOG, Manifest.permission.READ_PHONE_STATE), 3) }
+        })
+
+        section(root, "⑥ 수동 실행")
         root.addView(Button(this).apply {
             text = "지금 바로 확인해서 보내기"
             setOnClickListener {
@@ -178,7 +189,7 @@ class MainActivity : AppCompatActivity() {
         return ScrollView(this).apply { addView(root) }
     }
 
-    private fun hasPerms() = perms.filter { it != Manifest.permission.POST_NOTIFICATIONS && it != Manifest.permission.SEND_SMS && it != Manifest.permission.READ_PHONE_STATE }
+    private fun hasPerms() = perms.filter { it != Manifest.permission.POST_NOTIFICATIONS && it != Manifest.permission.SEND_SMS && it != Manifest.permission.READ_PHONE_STATE && it != Manifest.permission.READ_CALL_LOG }
         .all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
 
     private fun batteryOk(): Boolean {
@@ -197,6 +208,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // 전화·통화기록 권한이 새로 생겼으면 감시 서비스를 다시 켜서 통화 감지를 시작
+        if (prefs.token.isNotBlank()) {
+            try { stopService(Intent(this, WatchService::class.java)) } catch (_: Exception) {}
+            WatchService.start(this)
+        }
         refresh()
     }
 
@@ -204,6 +220,7 @@ class MainActivity : AppCompatActivity() {
         val lines = mutableListOf<String>()
         lines += if (hasPerms()) "✅ 사진·오디오 접근 허용됨" else "⚠️ 사진·오디오 접근 권한이 필요해요"
         lines += if (SmsSender.hasPermission(this)) "✅ 문자·전화 권한 허용됨 (자동 문자)" else "⚠️ 자동 문자를 쓰려면 '문자'와 '전화' 권한을 허용해 주세요 (권한 허용 버튼)"
+        lines += if (CallbackSender.hasPermission(this)) "✅ 통화기록 허용됨 (콜백 문자)" else "⚠️ 콜백 문자를 쓰려면 '통화기록' 권한을 허용해 주세요 (막히면 앱 정보 ⋮ → 제한된 설정 허용)"
         lines += if (batteryOk()) "✅ 배터리 최적화 제외됨" else "⚠️ 배터리 최적화 제외를 해주세요 (안 하면 전송이 늦어져요)"
         lines += if (prefs.token.isNotBlank()) "✅ 서버 연결 정보 저장됨" else "⚠️ 앱 출입증을 넣고 저장해 주세요"
         status.text = lines.joinToString("\n")

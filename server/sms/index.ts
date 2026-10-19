@@ -25,6 +25,28 @@ Deno.serve(async (req) => {
 
   if (action === "ping") return json({ ok: true });
 
+  // 콜백 문자: 통화 끝/부재중/거절 직후 앱이 물어봄 → 이 번호에 처음이면 문구를 돌려주고 "보내는 중"으로 기록
+  // 번호당 평생 한 번만 (key = cb:번호, 이미 있으면 안 보냄)
+  if (action === "callback") {
+    const type = String(body.type ?? "");
+    const phone = String(body.phone ?? "").replace(/\D/g, "");
+    if (!/^01\d{8,9}$/.test(phone)) return json({ send: false, reason: "휴대폰 번호 아님" });
+    const { data: st } = await db.from("sms_settings").select("callback").eq("id", 1).single();
+    const cb = (st?.callback ?? {}) as Record<string, { on?: boolean; text?: string } | boolean>;
+    const conf = cb[type] as { on?: boolean; text?: string } | undefined;
+    if (cb.on === false || !conf || conf.on === false || !conf.text) return json({ send: false, reason: "꺼짐" });
+    const labels: Record<string, string> = { after: "콜백 · 통화 후", missed: "콜백 · 부재중", rejected: "콜백 · 거절" };
+    const label = labels[type] ?? "콜백";
+    const now = new Date().toISOString();
+    const { data: ins, error } = await db.from("sms_queue").upsert({
+      key: "cb:" + phone, name: String(body.name ?? "").slice(0, 40) || null, phone, kind: "callback", label,
+      body: conf.text, send_at: now, status: "sending", claimed_at: now, edited: true,
+    }, { onConflict: "key", ignoreDuplicates: true }).select("id, body");
+    if (error) return json({ send: false, reason: error.message }, 500);
+    if (!ins || !ins.length) return json({ send: false, reason: "이미 보낸 번호" });
+    return json({ send: true, id: ins[0].id, body: ins[0].body });
+  }
+
   if (action === "report") {
     const results = Array.isArray(body.results) ? body.results : [];
     for (const r of results as { id: string; ok: boolean; error?: string }[]) {
@@ -50,10 +72,10 @@ Deno.serve(async (req) => {
   const h = kstHour();
   if (h < SEND_FROM || h >= SEND_UNTIL) return json({ enabled, night: true, items: [] });
 
-  // 자동 발송이 꺼져 있어도 "내 폰으로 테스트" 문자는 보냄
+  // 자동 발송이 꺼져 있어도 "내 폰으로 테스트"와 콜백 문자 다시 보내기는 보냄
   let q = db.from("sms_queue").select("id")
     .eq("status", "scheduled").lte("send_at", new Date().toISOString());
-  if (!enabled) q = q.eq("kind", "test");
+  if (!enabled) q = q.in("kind", ["test", "callback"]);
   const { data: due } = await q.order("send_at", { ascending: true }).limit(30);
   if (!due || !due.length) return json({ enabled, items: [] });
 

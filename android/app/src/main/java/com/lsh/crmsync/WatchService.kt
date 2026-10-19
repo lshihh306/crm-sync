@@ -22,6 +22,7 @@ import android.provider.MediaStore
 class WatchService : Service() {
     private var observer: ContentObserver? = null
     private val handler = Handler(Looper.getMainLooper())
+    private var unwatchCalls: () -> Unit = {}
     // 폰이 깨어 있는 동안 5분마다 "보낼 자동 문자" 확인 (WorkManager 15분 주기보다 촘촘하게)
     private val smsTick = object : Runnable {
         override fun run() {
@@ -45,6 +46,8 @@ class WatchService : Service() {
         contentResolver.registerContentObserver(MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL), true, obs)
         observer = obs
         handler.postDelayed(smsTick, 30 * 1000L)
+        unwatchCalls = CallbackSender.watch(this)
+        CallbackSender.scanLater(this, 5000)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -54,6 +57,7 @@ class WatchService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacks(smsTick)
+        try { unwatchCalls() } catch (_: Exception) {}
         observer?.let { contentResolver.unregisterContentObserver(it) }
         super.onDestroy()
     }

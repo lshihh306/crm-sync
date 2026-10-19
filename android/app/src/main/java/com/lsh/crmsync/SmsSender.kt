@@ -38,6 +38,7 @@ class SmsWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, p
     override suspend fun doWork(): Result {
         try {
             SmsSender.run(applicationContext)
+            CallbackSender.scan(applicationContext) // 통화 직후 놓친 콜백이 있으면 여기서 처리
         } catch (t: Throwable) {
             Prefs(applicationContext).log("⚠️ 자동 문자 작업 오류: ${t.javaClass.simpleName} ${t.message ?: ""}".take(200))
         }
@@ -61,7 +62,7 @@ object SmsSender {
     /** ingest 주소에서 sms 함수 주소를 만듦 */
     private fun url(prefs: Prefs) = prefs.serverUrl.replace(Regex("/ingest/?$"), "/sms")
 
-    private fun call(prefs: Prefs, body: JSONObject): JSONObject? {
+    fun call(prefs: Prefs, body: JSONObject): JSONObject? {
         val req = Request.Builder().url(url(prefs))
             .header("x-app-token", prefs.token)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -112,7 +113,7 @@ object SmsSender {
     }
 
     /** @return null이면 성공, 아니면 실패 사유 */
-    private fun send(ctx: Context, phone: String, text: String): String? {
+    fun send(ctx: Context, phone: String, text: String): String? {
         val sms: SmsManager = if (Build.VERSION.SDK_INT >= 31) ctx.getSystemService(SmsManager::class.java)
             else @Suppress("DEPRECATION") SmsManager.getDefault()
         val parts = sms.divideMessage(text)

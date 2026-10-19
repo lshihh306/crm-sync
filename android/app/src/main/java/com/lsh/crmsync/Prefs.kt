@@ -35,6 +35,16 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("autoSmsOn", true)
         set(v) = p.edit().putBoolean("autoSmsOn", v).apply()
 
+    /** 콜백 문자 (통화 후·부재중·거절) */
+    var callbackOn: Boolean
+        get() = p.getBoolean("callbackOn", true)
+        set(v) = p.edit().putBoolean("callbackOn", v).apply()
+
+    /** 이 시각(ms) 이후 통화기록만 콜백 대상 */
+    var cbSince: Long
+        get() = p.getLong("cbSince", 0)
+        set(v) = p.edit().putLong("cbSince", v).apply()
+
     var wifiOnly: Boolean
         get() = p.getBoolean("wifiOnly", false)
         set(v) = p.edit().putBoolean("wifiOnly", v).apply()

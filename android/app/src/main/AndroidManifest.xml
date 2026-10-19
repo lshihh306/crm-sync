@@ -15,6 +15,8 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <!-- 삼성 폰은 문자 발송 때 유심 정보(GID1)를 읽어서 전화 상태 권한이 함께 필요 -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- 콜백 문자: 통화가 끝나면 통화기록에서 번호와 종류(통화·부재중·거절)를 확인 -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <application
