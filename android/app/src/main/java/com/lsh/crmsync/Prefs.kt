@@ -30,6 +30,11 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("smsOn", true)
         set(v) = p.edit().putBoolean("smsOn", v).apply()
 
+    /** 자동 문자(안부·감사·보험 만기) 이 폰에서 보내기 */
+    var autoSmsOn: Boolean
+        get() = p.getBoolean("autoSmsOn", true)
+        set(v) = p.edit().putBoolean("autoSmsOn", v).apply()
+
     var wifiOnly: Boolean
         get() = p.getBoolean("wifiOnly", false)
         set(v) = p.edit().putBoolean("wifiOnly", v).apply()

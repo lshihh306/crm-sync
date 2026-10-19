@@ -67,7 +67,10 @@ textarea{resize:vertical;width:100%}
 .badge{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:2px}
 .badge.warn{background:var(--warn-soft);color:var(--warn)}
 .badge.ex{background:var(--accent-soft);color:var(--accent)}
+.badge.ref{background:color-mix(in srgb,var(--s-personal) 15%,transparent);color:var(--s-personal);font-weight:700}
 .memo{grid-column:1/-1;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:8px;white-space:pre-wrap;overflow-wrap:anywhere}
+.memo.clamp .mt{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.memo .mmore{font:inherit;font-size:12.5px;font-weight:700;color:var(--accent);background:none;border:none;padding:2px 0 0;cursor:pointer}
 .notice{background:var(--warn-soft);color:var(--warn);border-radius:var(--r);padding:10px 14px;font-size:14px}
 dialog{border:none;border-radius:14px;padding:0;background:var(--surface);color:var(--fg);width:min(760px,calc(100vw - 24px));max-height:calc(100dvh - 24px)}
 dialog::backdrop{background:rgba(5,15,20,.55)}
@@ -323,6 +326,17 @@ label.full{grid-column:1/-1}
 .ledger-top b{font-size:18px}
 .pc-chips button{white-space:nowrap}
 #psList .pc-item{background:var(--surface);border:1px solid var(--line)}
+.ps-bulk{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--r);padding:10px 12px}
+.ps-bulk b{font-size:14px;margin-right:auto}
+.ps-bulk .btn{padding:7px 12px;font-size:13px}
+.ps-bulk select{padding:7px 8px;font-size:13px}
+.ps-bulk .btn.danger.arm{background:var(--danger);color:#fff;border-color:var(--danger)}
+#psList.selmode .pc-item{grid-template-columns:22px 1fr auto}
+#psList.selmode .pc-item i{width:22px;height:22px;border-radius:6px;border:2px solid var(--line);background:var(--bg);align-self:center;display:grid;place-items:center;font-style:normal;font-size:14px;font-weight:800;color:#fff}
+#psList.selmode .pc-item.sel{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+#psList.selmode .pc-item.sel i{background:var(--accent);border-color:var(--accent)}
+#psList.selmode .pc-item.sel i::after{content:"✓"}
+.pc-item .w{font-size:13.5px;font-weight:600;color:var(--fg);overflow-wrap:anywhere}
 
 /* --- 캘린더: 모바일 달력 앱 느낌 --- */
 #viewCal{gap:6px;padding-bottom:84px}
@@ -442,6 +456,27 @@ label.full{grid-column:1/-1}
 .ib-dup b:first-child{color:var(--warn)}
 .ib-dup ul{margin:6px 0 0;padding-left:18px}
 @media (max-width:560px){.ib-edit{grid-template-columns:1fr}}
+.smscard{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.smscard.st-need{border-left-color:var(--accent)}
+.smscard.st-fail{border-left-color:var(--danger)}
+.smscard.st-off{opacity:.7}
+.sm-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 14px;align-items:start}
+.sm-top b{font-size:15.5px}
+.sm-when{font-family:var(--mono);font-size:13px;color:var(--muted);text-align:right;white-space:nowrap}
+.status.fail{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
+.status.off{background:var(--surface-2);color:var(--muted)}
+.sm-err{font-size:13px;color:var(--danger)}
+.sm-body{font:inherit;font-size:13.5px;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;cursor:pointer;display:block;width:100%;max-height:5.2em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
+.sm-body.open{max-height:none;-webkit-mask-image:none;mask-image:none}
+.sm-ta{font-size:13.5px;line-height:1.5}
+.smscard .tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.smshead{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.smshead .meta{font-size:13.5px}
+#smsSwitch[aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:#fff}
+#smsSwitch[aria-pressed="false"]{border-color:var(--warn);color:var(--warn)}
+.stats.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:560px){.stats.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+#smsOffList .chip{font:inherit;font-size:12px;border:none;cursor:pointer}
 </style>
 
 <div class="wrap">
@@ -467,6 +502,7 @@ label.full{grid-column:1/-1}
     <button class="tab" type="button" role="tab" id="tabLedger" data-tab="ledger" aria-selected="false">출고 고객</button>
     <button class="tab" type="button" role="tab" id="tabAlerts" data-tab="alerts" aria-selected="false">보험 만료 알림 <span class="count" id="tabBadge" hidden>0</span></button>
     <button class="tab" type="button" role="tab" id="tabCare" data-tab="care" aria-selected="false">안부 인사 <span class="count" id="careBadge" hidden>0</span></button>
+    <button class="tab" type="button" role="tab" id="tabSms" data-tab="sms" aria-selected="false">자동 문자 <span class="count" id="smsBadge" style="background:var(--danger)" hidden>0</span></button>
     <button class="tab" type="button" role="tab" id="tabProfit" data-tab="profit" aria-selected="false" hidden>수익</button>
     <button class="tab" type="button" role="tab" id="tabCalc" data-tab="calc" aria-selected="false" hidden>수당 계산기</button>
     <button class="tab" type="button" role="tab" id="tabFin" data-tab="fin" aria-selected="false" hidden>금융 계산기</button>
@@ -495,6 +531,22 @@ label.full{grid-column:1/-1}
     <div id="careAll"></div>
   </div>
 
+
+  <div id="viewSms" class="view" hidden>
+    <p class="lead"><b>출고 감사 · 안부 인사 · 보험 만기 안내</b> 문자를 시점에 맞춰 <b>매일 오후 2시</b>에 본폰(010-7724-0439)에서 자동으로 보내요. 시점 3일 전에 아래 목록에 올라오니, 그 전에 문구를 고치거나 빼면 돼요. 보내고 나면 안부 인사·보험 만료 알림에 <b>연락 완료</b>가 자동으로 체크돼요.</p>
+    <div class="smshead">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:0"><div class="meta" id="smsPhone">불러오는 중…</div><div class="confirm" id="smsAskOn" hidden>켜면 보낼 시각이 지난 문자 <b id="smsAskN">0</b>건이 바로 나가요. 오른쪽 버튼을 한 번 더 누르면 켜져요. <button class="btn ghost" type="button" id="smsAskCancel">취소</button></div><div class="meta" id="smsOffNote" hidden>지금은 <b>꺼져 있어서</b> 목록만 만들어지고 실제로 나가진 않아요. 목록을 확인하고 켜 주세요.</div></div>
+      <div class="actions"><button class="btn" id="smsTest" type="button">내 폰으로 테스트</button><button class="btn" id="smsRefresh" type="button">새로고침</button><button class="btn" id="smsSwitch" type="button" aria-pressed="false" disabled>자동 발송 꺼짐</button></div>
+    </div>
+    <div class="stats four" id="smsFilters">
+      <button class="stat warn" type="button" data-sf="up"><div class="k">오늘 보낼 문자</div><div class="v" id="sToday">–</div></button>
+      <button class="stat" type="button" data-sf="up"><div class="k">예정 (3일 안)</div><div class="v" id="sUp">–</div></button>
+      <button class="stat" type="button" data-sf="sent"><div class="k">보낸 문자 (30일)</div><div class="v" id="sSent">–</div></button>
+      <button class="stat" type="button" data-sf="fail"><div class="k">실패</div><div class="v" id="sFail">–</div></button>
+    </div>
+    <div id="smsList" class="group"></div>
+    <div class="actions" style="justify-content:space-between;align-items:center"><div id="smsOffList" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div><button class="btn ghost" type="button" data-sf="off">보내지 않기로 한 문자 보기</button></div>
+  </div>
   <div id="viewProfit" class="view" hidden>
     <div class="filters">
       <select id="pYear" aria-label="수익 연도"></select>
@@ -636,7 +688,15 @@ label.full{grid-column:1/-1}
       <select id="psMonth" aria-label="월"></select>
       <button class="btn ghost" id="psReset" type="button">초기화</button>
     </div>
-    <div class="pc-chips" id="psChips"></div>
+    <div style="display:flex;gap:8px;align-items:flex-start;justify-content:space-between"><div class="pc-chips" id="psChips"></div><button class="btn" id="psSelBtn" type="button" style="flex:0 0 auto">☑ 선택</button></div>
+    <div class="ps-bulk" id="psBulk" hidden>
+      <b id="psSelN">0명 선택</b>
+      <button class="btn" id="psSelAll" type="button">전체 선택</button>
+      <select id="psMoveTo" aria-label="옮길 단계"></select>
+      <button class="btn primary" id="psMoveBtn" type="button">단계 이동</button>
+      <button class="btn danger" id="psDelBtn" type="button">삭제</button>
+      <button class="btn ghost" id="psSelCancel" type="button">취소</button>
+    </div>
     <div class="pc-items" id="psList"></div>
   </div>
 
@@ -669,7 +729,7 @@ label.full{grid-column:1/-1}
       <button class="btn ghost" type="button" id="closeBtn">닫기</button>
     </div>
     <div class="sheet-body">
-      <div class="paste">
+      <div class="paste" hidden>
         <label for="pasteBox" style="color:var(--fg);font-weight:600">텍스트로 한 번에 입력</label>
         <p>"항목: 내용" 형식으로 줄마다 적고 <b>칸에 채우기</b>를 누르면 아래 칸이 자동으로 채워져요. 날짜는 2026.9.15, 26-9-15 모두 돼요.</p>
         <textarea id="pasteBox" rows="5" placeholder="고객명: 홍길동&#10;연락처: 010-1234-5678&#10;차량: 그랜저 하이브리드 캘리그래피&#10;옵션: 파노라마선루프, 빌트인캠2&#10;외장: 세레니티 화이트 펄&#10;내장: 블랙&#10;출고일: 2026.9.28&#10;선팅: 루마 버텍스 35%&#10;블랙박스: 아이나비 QXD"></textarea>
@@ -680,6 +740,7 @@ label.full{grid-column:1/-1}
         <legend>고객</legend>
         <label>고객명<input id="f_name" required></label>
         <label>연락처<input id="f_phone" inputmode="tel"></label>
+        <label class="full">구분<input id="f_referrer" placeholder="예: 성훈 소개, BMW 출고고객 (여러 개는 쉼표로)"></label>
         <label class="full">구매 방식<input id="f_payment" placeholder="현금 / 할부 / 리스 / 렌트 · 금융사"></label>
       </fieldset>
 
@@ -745,7 +806,7 @@ label.full{grid-column:1/-1}
 
 <script>
 (function(){
-const F = ["name","phone","payment","model","trim","options","extColor","intColor","vin","deliveredAt","registeredAt","insuranceStart","plate","tint","blackbox","ppf","coating","hipass","mat","etcWork","memo"];
+const F = ["name","phone","referrer","payment","model","trim","options","extColor","intColor","vin","deliveredAt","registeredAt","insuranceStart","plate","tint","blackbox","ppf","coating","hipass","mat","etcWork","memo"];
 const WORKS = [["tint","선팅"],["blackbox","블랙박스"],["ppf","PPF"],["coating","유리막"],["hipass","하이패스"],["mat","용품"],["etcWork","기타"]];
 const DATES = ["deliveredAt","registeredAt","insuranceStart"];
 const MONEY = [["commission","판매수당"],["finance","금융수수료"],["insFee","보험수수료"],["usedCar","중고차"],["etcIncome","기타(작업, 등록)"],["expense","작업비"]];
@@ -755,6 +816,17 @@ function parseMoney(v){
   let m=v.match(/^(-?\d+(?:\.\d+)?)만(\d*)$/); if(m) return Math.round(parseFloat(m[1])*10000 + (m[2]?+m[2]:0));
   m=v.match(/^-?\d+(?:\.\d+)?$/); return m ? Math.round(+v) : null;
 }
+// 금액 칸: 숫자만 적으면 입력하는 동안 천 단위 쉼표 자동 (예: 350000 → 350,000). "35만"처럼 쓰면 그대로 둠
+document.addEventListener("input",e=>{
+  const el=e.target; if(!el||el.tagName!=="INPUT"||el.getAttribute("inputmode")!=="numeric") return;
+  const v=el.value; if(!/^-?[\d,]*$/.test(v)) return;
+  const pos=el.selectionStart??v.length, nBefore=v.slice(0,pos).replace(/[^\d]/g,"").length;
+  const neg=v.startsWith("-"), d=v.replace(/[^\d]/g,"").replace(/^0+(?=\d)/,"");
+  const out=(neg?"-":"")+d.replace(/\B(?=(\d{3})+(?!\d))/g,",");
+  if(out===v) return; el.value=out;
+  let i=0,c=0; while(i<out.length&&c<nBefore){ if(/\d/.test(out[i])) c++; i++; }
+  try{ el.setSelectionRange(i+(neg&&nBefore===0?1:0),i+(neg&&nBefore===0?1:0)); }catch(_){}
+});
 const won = n => (n<0?"−":"") + Math.abs(Math.round(n||0)).toLocaleString("ko-KR");
 const netOf = r => (r.commission||0)+(r.finance||0)+(r.insFee||0)+(r.usedCar||0)+(r.etcIncome||0)-(r.expense||0);
 const hasMoney = r => MONEY.some(([k])=>typeof r[k]==="number");
@@ -835,7 +907,10 @@ function parseText(txt){
 
 // --- filters
 function buildYearOptions(){
-  const sel=$("year"), cur=sel.value, basis=$("basis").value;
+  const sel=$("year"), basis=$("basis").value;
+  // 처음 열 때는 이번 달만 보이게
+  if(!sel.dataset.init){ sel.dataset.init="1"; const n=new Date(); sel.innerHTML=`<option value="${n.getFullYear()}">${n.getFullYear()}년</option>`; sel.value=String(n.getFullYear()); $("month").value=String(n.getMonth()+1); }
+  const cur=sel.value;
   const ys=new Set([new Date().getFullYear()]);
   all.forEach(r=>{ const v=r[basis]; if(v) ys.add(+v.slice(0,4)); });
   sel.innerHTML='<option value="">전체 연도</option>'+[...ys].sort((a,b)=>b-a).map(y=>`<option value="${y}">${y}년</option>`).join("");
@@ -847,11 +922,13 @@ function filtered(){
   const q=$("q").value.trim().toLowerCase().replace(/-/g,""), basis=$("basis").value, y=$("year").value, mo=$("month").value;
   return all.filter(r=>{
     const v=r[basis]||"";
+    if(!v && (y||mo)){ /* 아직 출고 전(계약) 고객은 이번 달 보기에 함께 */ const n=new Date(); if(!(y===String(n.getFullYear()) && (!mo||+mo===n.getMonth()+1))) return false; }
+    else{
     if(y && v.slice(0,4)!==y) return false;
-    if(mo && (!v || +v.slice(5,7)!==+mo)) return false;
+    if(mo && (!v || +v.slice(5,7)!==+mo)) return false; }
     if(q){ const hay=F.map(k=>r[k]||"").join(" ").toLowerCase().replace(/-/g,""); if(!q.split(/\s+/).every(t=>hay.includes(t))) return false; }
     return true;
-  }).sort((a,b)=> ((b[basis]||"").localeCompare(a[basis]||"")));
+  }).sort((a,b)=> (!a[basis]&&b[basis]?-1:a[basis]&&!b[basis]?1:0) || (b[basis]||"").localeCompare(a[basis]||"") || String(b.contractedAt||b.createdAt||"").localeCompare(String(a.contractedAt||a.createdAt||"")));
 }
 
 function rowHTML(r){
@@ -860,7 +937,7 @@ function rowHTML(r){
   const works = WORKS.filter(([k])=>r[k]).map(([k,l])=>`<span class="chip"><em>${l}</em>${esc(r[k])}</span>`).join("");
   const colors=[r.extColor&&("외장 "+r.extColor), r.intColor&&("내장 "+r.intColor)].filter(Boolean).map(esc).join(" · ");
   return `<article class="row">
-    <div class="who"><b>${esc(r.name||"(이름 없음)")}</b>${r.isExample?'<span class="badge ex">예시</span>':""}
+    <div class="who"><b>${esc(r.name||"(이름 없음)")}</b>${pTagBadges(r.referrer)}${r.isExample?'<span class="badge ex">예시</span>':""}
       ${r.phone?`<div class="phone mono">${esc(r.phone)} <button class="copy" type="button" data-copy="${esc(r.phone)}">복사</button></div>`:""}
       ${r.payment?`<div class="meta">${esc(r.payment)}</div>`:""}
     </div>
@@ -873,7 +950,7 @@ function rowHTML(r){
     <div class="datecol dates"><span>출고</span><span class="mono">${fmt(r.deliveredAt)}</span><span>등록</span><span class="mono">${fmt(r.registeredAt)}</span><span>보험시행</span><span class="mono">${fmt(r.insuranceStart)}</span><span>보험만료</span><span class="mono">${ex?fmt(ex.str):"–"}${insBadge}</span></div>
     <div class="edit"><button class="btn" type="button" data-edit="${esc(r.id)}">수정</button></div>
     ${unlocked?moneyHTML(r):""}
-    ${r.memo?`<div class="memo">${esc(r.memo)}</div>`:""}
+    ${r.memo?`<div class="memo clamp"><div class="mt">${esc(r.memo)}</div><button type="button" class="mmore" hidden>더보기 ▾</button></div>`:""}
     ${r.prospectId?(()=>{const pp=prospects.find(x=>x.id===r.prospectId);return `<div class="memo" style="white-space:normal"><button class="check" type="button" data-phist="${esc(r.prospectId)}">📞 상담 히스토리 ${pp?(pp.logs||[]).length:0}건 보기</button>${r.contractedAt?` <span class="meta">계약 <span class="mono">${fmt(r.contractedAt)}</span></span>`:""}</div>`})():""}
   </article>`;
 }
@@ -903,7 +980,7 @@ function render(){
   const groups=new Map();
   rows.forEach(r=>{ const v=r[basis]; const k=v?v.slice(0,7):"none"; if(!groups.has(k)) groups.set(k,[]); groups.get(k).push(r); });
   list.innerHTML=[...groups].map(([k,rs])=>{
-    const title = k==="none" ? `${BASIS_LABEL[basis]}일 미입력` : `${k.slice(0,4)}년 ${+k.slice(5,7)}월`;
+    const title = k==="none" ? `출고 대기 (${BASIS_LABEL[basis]}일 미입력)` : `${k.slice(0,4)}년 ${+k.slice(5,7)}월`;
     return `<section class="group"><h2><b>${title}</b> ${BASIS_LABEL[basis]} ${rs.length}명</h2>${rs.map(rowHTML).join("")}</section>`;
   }).join("");
 }
@@ -1116,13 +1193,16 @@ function renderAlertBar(){
   const ibn=(typeof ibPendingCount==="function")?ibPendingCount():0;
   const lowc=(typeof ibLowCredit==="function")?ibLowCredit():[];
   lowc.forEach(x=>items.unshift(`<a class="abtn" style="border-color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent);color:var(--danger);text-decoration:none" href="${x.url}" target="_blank" rel="noopener">💳 ${x.name} 잔액 부족 · 충전하기 ›</a>`));
+  const smsF=(typeof smsFailedN==="function")?smsFailedN():0;
+  if(smsF) items.unshift(`<button class="abtn" style="border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)" type="button" data-go="sms">⚠ 자동 문자 실패 <b>${smsF}</b>건</button>`);
+  if(typeof smsAppOff==="function" && smsAppOff()) items.unshift(`<button class="abtn" style="border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,transparent)" type="button" data-go="sms">📵 본폰 자동 문자 앱 연결 끊김</button>`);
   if(ibn) items.unshift(`<button class="abtn call" type="button" data-go="inbox">📥 새 상담 <b>${ibn}</b>건 확인</button>`);
   bar.innerHTML = items.length ? `<span class="lbl">오늘 해야 할 일</span>${items.join("")}` : "";
   bar.hidden = !items.length;
 }
 function subText(){
   if(!loaded||!ploaded) return "불러오는 중…";
-  const pn=prospects.filter(c=>!["계약","해약"].includes(c.stage)).length;
+  const pn=prospects.filter(c=>!["계약","해약","출고 완료"].includes(c.stage)).length;
   return `가망 고객 ${pn}명 / 출고 고객 ${all.length}명`;
 }
 $("alertBar").addEventListener("click",e=>{ const b=e.target.closest("[data-go]"); if(!b) return; if(b.dataset.go==="inbox"){ ibOpen(); return; } if(b.dataset.go==="care"){ careFilter="due"; renderCare(); } if(b.dataset.go==="ps"){ psFilter={stage:"전체",q:"",due:true}; $("psQ").value=""; renderPS(); } showTab(b.dataset.go); });
@@ -1488,6 +1568,26 @@ function pUpcomingFor(c){
   return carnews.find(n=>n.type==="upcoming"&&!n.example&&n.keyword&&String(n.keyword).split(/[,\s]+/).filter(Boolean).some(k=>car.includes(k)))||null;
 }
 const pAutoBusy=new Set();
+// 출고 고객에 출고일·등록일이 들어가면 연결된 가망 고객은 "출고 완료"로 바꿔 가망 고객 목록에서 뺀다 (히스토리는 그대로)
+const pDoneBusy=new Set();
+async function pDoneSync(){
+  if(!pcol||!ploaded||!loaded) return;
+  for(const r of all){
+    const d=r.deliveredAt||r.registeredAt; if(!r.prospectId||!d) continue;
+    const p=prospects.find(x=>x.id===r.prospectId); if(!p||p.stage==="출고 완료"||pDoneBusy.has(p.id)) continue;
+    pDoneBusy.add(p.id);
+    try{ await pcol.doc(p.id).update({stage:"출고 완료", deliveredAt:d, nextDate:"", updatedAt:new Date().toISOString()}); if(p.gcalId&&typeof gDel==="function") gDel(p.gcalId); }catch(_){}
+    pDoneBusy.delete(p.id);
+  }
+  // 반대로 출고일·등록일을 지우면 다시 "계약"으로 되돌려 가망 고객에 보이게
+  for(const p of prospects){
+    if(p.stage!=="출고 완료"||!p.customerId||pDoneBusy.has(p.id)) continue;
+    const r=all.find(x=>x.id===p.customerId); if(!r||r.deliveredAt||r.registeredAt) continue;
+    pDoneBusy.add(p.id);
+    try{ await pcol.doc(p.id).update({stage:"계약", deliveredAt:"", updatedAt:new Date().toISOString()}); }catch(_){}
+    pDoneBusy.delete(p.id);
+  }
+}
 async function pAutoNewcar(){
   if(!pcol||!ploaded||typeof carnews==="undefined"||!carnews.length) return;
   for(const c of prospects){
@@ -1507,8 +1607,8 @@ function pNewsHit(c){
     if(c.newsAck===n.id) continue;
     const ld=String(n.launchDate||"").slice(0,10);
     if(/^\d{4}-\d{2}-\d{2}$/.test(ld)){
-      // 출시 3일 전부터 출시 당일까지만 알림
-      const t=todayStr(), d=new Date(ld+"T00:00:00"); d.setDate(d.getDate()-3);
+      // 출시 하루 전부터 출시 당일까지만 알림
+      const t=todayStr(), d=new Date(ld+"T00:00:00"); d.setDate(d.getDate()-1);
       const from=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
       if(t<from||t>ld) continue;
       if(!c.lastContact||c.lastContact<=from) return n;
@@ -1644,7 +1744,7 @@ async function pToCustomer(pid,c,silent){
       const now=new Date().toISOString(), rec={};
       F.forEach(k=>rec[k]="");
       Object.assign(rec,{name:c.name||"", phone:c.phone||"", model:c.car||"",
-        payment:c.pay&&c.pay!=="미정"?c.pay:"",
+        payment:c.pay&&c.pay!=="미정"?c.pay:"", referrer:c.referrer||"",
         memo:[c.source?c.source+" 문의":"", c.memo||""].filter(Boolean).join(" / "),
         prospectId:pid, contractedAt:todayStr(), createdAt:now, updatedAt:now});
       cid="c"+puid(); await col.doc(cid).set(rec);
@@ -1713,12 +1813,22 @@ function pOpenSheet(html,kind,arg,cleanup){
 function pClose(keep){if(pCleanup&&!keep)pCleanup();pCleanup=null;pKind=null;$("pcSheetHost").innerHTML=""}
 function pRefresh(){if(pKind==="day")pOpenDay(pArg);else if(pKind==="list")pOpenList(pArg,true)}
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){if($("pcViewerHost").innerHTML)$("pcViewerHost").innerHTML="";else if(pKind)pClose()}});
+// 폰 저장명 규칙: ☆ @ ₩ 로 시작하면 고객. ☆출고 = BMW 시절 출고 고객, @출고 = 현대차 출고 고객, "@출고(성훈) 모델 성함" → 괄호 안 = 소개해 준 사람
+// 구분 표시: 쉼표로 여러 개 (예: "김석민 소개, BMW 출고고객")
+function pTagBadges(v){ return String(v||"").split(/\s*[,，]\s*/).filter(Boolean).map(t=>`<span class="badge ref">${/소개/.test(t)?"🤝 ":/BMW/i.test(t)?"⭐ ":""}${esc(t)}</span>`).join(""); }
+function pRefFromContact(n){ const m=String(n||"").match(/^[☆@₩]\s*출고\s*\(([^)]+)\)/); return m?m[1].trim():""; }
+const pTrimP=s=>String(s||"").replace(/\s*\([^)]*\)/g,"").trim();
+function pWantLine(c){
+  const up=c.stage==="신차 문의"&&typeof pUpcomingFor==="function"?pUpcomingFor(c):null;
+  if(up) return `🚗 ${pTrimP(up.model)} 대기 / ${up.launchDate?pshort(up.launchDate).replace(/ \(.\)/,"")+" 출시":(pTrimP(up.when)||"시기 미정")}`;
+  return `${c.car||"모델 미정"} / ${c.buyWhen||"구매 시기 미정"}`;
+}
 function pItemHTML(it){
   const c=it.c;
   const sub=[it.text||(it.kind==="todo"?"다음 할 일 미정":""),it.nocar?"":c.car].filter(Boolean).map(esc).join(" · ");
   const nfiles=it.kind==="done"?(it.log.files||[]).length:0;
   return `<button type="button" class="pc-item ${it.kind==="done"?"done":""}" data-pcust="${esc(c.id)}" style="--c:${pcolor(c)}"><i></i>
-    <span style="min-width:0"><span class="t">${esc(c.name)}</span><br><span class="s">${it.kind==="done"?"연락 완료 · ":it.late?"연락 지연 · ":""}${sub}${nfiles?` · 첨부 ${nfiles}`:""}</span></span>
+    <span style="min-width:0"><span class="t">${esc(c.name)}</span>${pTagBadges(c.referrer||(c.source==="소개"?"소개":""))}${it.want?`<br><span class="w">${esc(it.want)}</span>`:""}<br><span class="s">${it.kind==="done"?"연락 완료 · ":it.late?"연락 지연 · ":""}${sub}${nfiles?` · 첨부 ${nfiles}`:""}</span></span>
     <span class="pc-tagcol"><span class="pc-tag" style="--c:${pcolor(c)}">${esc(c.stage||"신규 문의")}</span>${it.dateLabel?`<small class="pc-date">${esc(it.dateLabel)}</small>`:""}</span></button>`;
 }
 function pOpenDay(d){
@@ -1740,7 +1850,7 @@ function pOpenList(filter,keep){
   const html=`<div class="pc-hd"><h3>${f.late?"연락 지연 고객":"가망 고객 목록"} <span style="color:var(--muted);font-size:14px">${list.length}명</span></h3>${f.late?'<button class="btn" type="button" id="pcAll">전체 보기</button>':'<button class="btn ghost" type="button" id="pcCloseL">닫기</button>'}</div>
     <input class="pc-search" id="pcLq" type="search" placeholder="이름 · 연락처 · 차종 · 메모 · 카톡 내용 검색" value="${esc(f.q)}">
     <div class="pc-chips">${["전체",...PSTAGES].map(s=>`<button type="button" data-plstage="${s}" aria-pressed="${f.stage===s}">${s}</button>`).join("")}</div>
-    <div class="pc-items">${list.length?list.map(c=>pItemHTML({c,kind:"todo",late:c.nextDate&&c.nextDate<t,text:(c.nextDate?pshort(c.nextDate)+" · ":"연락일 미정 · ")+(c.nextAction||"")})).join(""):'<p class="pc-empty">해당하는 고객이 없어요.</p>'}</div>`;
+    <div class="pc-items">${list.length?list.map(c=>pItemHTML({c,kind:"todo",want:pWantLine(c),nocar:true,late:c.nextDate&&c.nextDate<t,text:(c.nextDate?pshort(c.nextDate)+" · ":"연락일 미정 · ")+(c.nextAction||"")})).join(""):'<p class="pc-empty">해당하는 고객이 없어요.</p>'}</div>`;
   if(keep&&pKind==="list"){
     const inp=$("pcLq"), pos=inp?inp.selectionStart:null, focused=document.activeElement===inp;
     pq(".pc-sheet").innerHTML=html; pArg=f;
@@ -1826,6 +1936,9 @@ function pOpenDialog(l){
   $("dlgX").onclick=()=>{host.innerHTML=""}; $("dlgW").onclick=e=>{ if(e.target.id==="dlgW") host.innerHTML=""; };
 }
 document.addEventListener("click",e=>{ const b=e.target.closest("[data-dlg]"); if(!b) return; e.preventDefault(); const l=pDlgStore[+b.dataset.dlg]; if(l) pOpenDialog(l); });
+function memoFit(){ document.querySelectorAll(".memo.clamp .mt").forEach(t=>{ if(t.dataset.fit||!t.clientHeight) return; t.dataset.fit=1; const b=t.nextElementSibling; if(b&&b.classList.contains("mmore")) b.hidden=!(t.scrollHeight>t.clientHeight+2); }); }
+new MutationObserver(()=>{ clearTimeout(memoFit._t); memoFit._t=setTimeout(memoFit,60); }).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:["hidden"]});
+document.addEventListener("click",e=>{ const b=e.target.closest(".mmore"); if(!b) return; const m=b.parentElement; const open=m.classList.toggle("clamp"); b.textContent=open?"더보기 ▾":"접기 ▴"; });
 function pLogHTML(l){
   return `<div class="it"><time>${pshort(l.date)}</time><div style="min-width:0"><p>${esc(l.text)}</p>${l.note?`<p class="lg-note">→ ${esc(l.note)}</p>`:""}${pDlgBtn(l)}${(l.files||[]).length?`<div class="pc-att">${l.files.map(f=>pFileHTML(f,false)).join("")}</div>`:""}</div></div>`;
 }
@@ -1841,8 +1954,10 @@ function pOpenEdit(id,dateForNew){
       <div class="pc-fld"><label for="pc_name">이름 *</label><input id="pc_name" value="${esc(c.name)}" placeholder="홍길동 대표님"></div>
       <div class="pc-fld"><label for="pc_phone">연락처</label><input id="pc_phone" inputmode="tel" value="${esc(c.phone)}" placeholder="010-0000-0000"></div>
       <div class="pc-fld"><label for="pc_car">관심 차종</label><input id="pc_car" value="${esc(c.car)}" placeholder="팰리세이드 하이브리드"></div>
+      <div class="pc-fld"><label for="pc_buy">구매 시기</label><input id="pc_buy" value="${esc(c.buyWhen||"")}" placeholder="예: 11월, 2027년 4월, 미정"></div>
       <div class="pc-fld"><label for="pc_source">유입 경로</label><select id="pc_source">${popts(PSOURCES,c.source)}</select></div>
-      <div class="pc-fld"><label for="pc_stage">진행 단계</label><select id="pc_stage">${popts(PSTAGES,c.stage||"신규 문의")}</select></div>
+      <div class="pc-fld"><label for="pc_ref">구분</label><input id="pc_ref" value="${esc(c.referrer||"")}" placeholder="예: 성훈 소개, BMW 출고고객"></div>
+      <div class="pc-fld"><label for="pc_stage">진행 단계</label><select id="pc_stage">${popts(PSTAGES.includes(c.stage||"신규 문의")?PSTAGES:PSTAGES.concat([c.stage]),c.stage||"신규 문의")}</select></div>
       <div class="pc-fld"><label for="pc_pay">구매 방식</label><select id="pc_pay">${popts(PPAYS,c.pay||"미정")}</select></div>
       <div class="pc-fld"><label for="pc_next">연락할 날</label><input id="pc_next" type="date" value="${esc(c.nextDate||"")}"></div>
       <div class="pc-fld"><label for="pc_action">할 일 (달력에 표시)</label><input id="pc_action" value="${esc(c.nextAction)}" placeholder="견적서 보내고 통화"></div>
@@ -1874,8 +1989,8 @@ function pOpenEdit(id,dateForNew){
   $("pcSave").onclick=async()=>{
     if(st.busy){toast("파일을 올리는 중이에요. 잠시만 기다려 주세요");return}
     const name=$("pc_name").value.trim(); if(!name){$("pc_name").focus();toast("이름을 입력해 주세요");return}
-    const data={name,phone:$("pc_phone").value.trim(),car:$("pc_car").value.trim(),source:$("pc_source").value,stage:$("pc_stage").value,
-      pay:$("pc_pay").value,nextDate:$("pc_next").value||"",nextAction:$("pc_action").value.trim(),inquiry:$("pc_inq").value.trim(),memo:$("pc_memo").value.trim(),files:st.files};
+    const data={name,phone:$("pc_phone").value.trim(),car:$("pc_car").value.trim(),buyWhen:$("pc_buy").value.trim(),source:$("pc_source").value,stage:$("pc_stage").value,
+      pay:$("pc_pay").value,referrer:$("pc_ref").value.trim(),nextDate:$("pc_next").value||"",nextAction:$("pc_action").value.trim(),inquiry:$("pc_inq").value.trim(),memo:$("pc_memo").value.trim(),files:st.files};
     const isNew=!id; if(isNew) data.logs=[];
     const nid=id||("p"+puid()); $("pcSave").disabled=true;
     if(await psave(nid,data,isNew)){const rm=st.removed;st.added=[];pClose(true);pdrop(rm);
@@ -1897,7 +2012,7 @@ function pOpenDone(id){
     <div class="pc-fld"><label for="pd_chat">카톡·문자 내용 붙여넣기</label><textarea id="pd_chat" rows="4" placeholder="카톡 대화를 길게 눌러 복사한 뒤 그대로 붙여넣으세요"></textarea></div>
     <div class="pc-fld"><span class="pc-lbl">통화 녹음 · 캡처 첨부</span><div id="pcAttWrap"></div></div>
     <div class="pc-grid2">
-      <div class="pc-fld"><label for="pd_stage">진행 단계</label><select id="pd_stage">${popts(PSTAGES,c.stage||"신규 문의")}</select></div>
+      <div class="pc-fld"><label for="pd_stage">진행 단계</label><select id="pd_stage">${popts(PSTAGES.includes(c.stage||"신규 문의")?PSTAGES:PSTAGES.concat([c.stage]),c.stage||"신규 문의")}</select></div>
       <div class="pc-fld"><label for="pd_next">다음 연락할 날</label><input id="pd_next" type="date" value=""></div>
     </div>
     ${pquick("pd_next")}
@@ -1926,7 +2041,7 @@ function pOpenDone(id){
 document.addEventListener("click",async e=>{
   const b=e.target.closest("button"); if(!b) return;
   if(b.dataset.pday){if(pshift.swiped&&Date.now()-pshift.swiped<400)return;pOpenDay(b.dataset.pday);return}
-  if(b.dataset.pcust){pOpenEdit(b.dataset.pcust);return}
+  if(b.dataset.pcust){ if(psSel&&b.closest("#psList")){ const id=b.dataset.pcust; psSel.has(id)?psSel.delete(id):psSel.add(id); b.classList.toggle("sel",psSel.has(id)); psBulkUI(); return; } pOpenEdit(b.dataset.pcust);return}
   if(b.dataset.pview){pOpenViewer(b.dataset.pview);return}
   if(b.dataset.pq){const t=$(b.parentElement.dataset.ptarget),q=b.dataset.pq,base=todayStr();
     t.value=q==="none"?"":q[0]==="d"?paddDays(base,+q.slice(1)):paddMonths(base,+q.slice(1));return}
@@ -2299,15 +2414,52 @@ function renderPS(){
   ysel.innerHTML='<option value="">전체 연도</option>'+[...ys].sort().reverse().map(y=>`<option value="${y}">${y}년</option>`).join("");
   ysel.value=[...ysel.options].some(o=>o.value===ycur)?ycur:"";
   const fy=ysel.value, fm=$("psMonth").value;
-  const list=prospects.filter(c=>!psFilter.due||dueSet.has(c.id))
+  const list=prospects.filter(c=>c.stage!=="출고 완료").filter(c=>!psFilter.due||dueSet.has(c.id))
     .filter(c=>{ const d=dOf(c); if(fy&&d.slice(0,4)!==fy) return false; if(fm&&(!d||+d.slice(5,7)!==+fm)) return false; return true; })
     .filter(c=>psFilter.stage==="전체"||(c.stage||"신규 문의")===psFilter.stage)
     .filter(c=>!qq||[c.name,c.phone,c.car,c.memo,c.inquiry,c.nextAction,c.source,...(c.logs||[]).map(l=>(l.text||"")+" "+(l.chat||""))].join(" ").toLowerCase().includes(qq))
-    .sort((a,b)=>(a.nextDate||"9999").localeCompare(b.nextDate||"9999"));
+    .sort((a,b)=>psFilter.due?(a.nextDate||"9999").localeCompare(b.nextDate||"9999"):(String(b.createdAt||"").localeCompare(String(a.createdAt||""))||String(b.lastContact||"").localeCompare(String(a.lastContact||""))));
   $("psList").innerHTML = !prospects.length ? `<p class="pc-empty">아직 가망 고객이 없어요. <b>+ 가망 고객</b>으로 첫 문의를 등록하세요.</p>`
     : !list.length ? `<p class="pc-empty">조건에 맞는 가망 고객이 없어요.</p>`
-    : list.map(c=>pItemHTML({c,kind:"todo",late:c.nextDate&&c.nextDate<t&&!P_CLOSED.includes(c.stage),dateLabel:dOf(c)?fmt(dOf(c)):"",text:(pNewsHit(c)?`🚗 ${pNewsHit(c).model||"신차"} ${pNewsHit(c).launchDate?pshort(pNewsHit(c).launchDate)+" 출시":"출시 확정"} · 바로 연락 · `:(c.stage==="신차 문의"&&pUpcomingFor(c)?`🚗 ${pUpcomingFor(c).model} 출시 대기${pUpcomingFor(c).when?" ("+pUpcomingFor(c).when+")":""} · `:""))+(c.nextDate?(c.nextDate===t?"오늘":pshort(c.nextDate))+" · ":"연락일 미정 · ")+(c.nextAction||"")+((c.logs||[]).length?` · 기록 ${(c.logs||[]).length}건`:"")})).join("");
+    : list.map(c=>pItemHTML({c,kind:"todo",want:pWantLine(c),nocar:true,late:c.nextDate&&c.nextDate<t&&!P_CLOSED.includes(c.stage),dateLabel:dOf(c)?fmt(dOf(c)):"",text:(pNewsHit(c)?`🚗 ${pNewsHit(c).model||"신차"} ${pNewsHit(c).launchDate?pshort(pNewsHit(c).launchDate)+" 출시":"출시 확정"} · 바로 연락 · `:"")+(c.nextDate?(c.nextDate===t?"오늘":pshort(c.nextDate))+" · ":"연락일 미정 · ")+(c.nextAction||"")+((c.logs||[]).length?` · 기록 ${(c.logs||[]).length}건`:"")})).join("");
+  try{ psVisible=list.map(c=>c.id); if(psSel) psBulkUI(); }catch(_){}
 }
+// --- 가망 고객 단체 선택 · 단계 이동 · 삭제
+let psSel=null, psVisible=[];
+function psBulkUI(){
+  const on=!!psSel; $("psBulk").hidden=!on; $("psList").classList.toggle("selmode",on);
+  $("psSelBtn").textContent=on?"☑ 선택 끝내기":"☑ 선택";
+  if(!on) return;
+  $("psSelN").textContent=`${psSel.size}명 선택`;
+  $("psMoveBtn").disabled=$("psDelBtn").disabled=!psSel.size;
+  document.querySelectorAll("#psList .pc-item[data-pcust]").forEach(el=>el.classList.toggle("sel",psSel.has(el.dataset.pcust)));
+}
+$("psMoveTo").innerHTML=PSTAGES.map(s=>`<option>${s}</option>`).join("");
+$("psSelBtn").onclick=()=>{ psSel=psSel?null:new Set(); psBulkUI(); };
+$("psSelCancel").onclick=()=>{ psSel=null; psBulkUI(); };
+$("psSelAll").onclick=()=>{ if(!psSel) return; const all_=psVisible.every(id=>psSel.has(id)); psVisible.forEach(id=>all_?psSel.delete(id):psSel.add(id)); psBulkUI(); };
+$("psMoveBtn").onclick=async()=>{
+  if(!psSel||!psSel.size||!pcol) return; const stg=$("psMoveTo").value, ids=[...psSel]; let n=0;
+  $("psMoveBtn").disabled=true;
+  for(const id of ids){ const c=prospects.find(x=>x.id===id); if(!c) continue;
+    try{ await pcol.doc(id).update({stage:stg, updatedAt:new Date().toISOString()}); n++;
+      const m=Object.assign({},c,{stage:stg});
+      if(P_CONTRACT.includes(stg)) await pToCustomer(id,m,true); else if(stg==="해약") await pCancelCustomer(id,c);
+      if(c.gcalId||c.nextDate) gSyncProspect(id,m,c.gcalId);
+    }catch(_){}
+  }
+  toast(`${n}명을 "${stg}"(으)로 옮겼어요`); psSel=new Set(); psBulkUI();
+};
+$("psDelBtn").onclick=async()=>{
+  const b=$("psDelBtn"); if(!psSel||!psSel.size||!pcol) return;
+  if(!b.classList.contains("arm")){ b.classList.add("arm"); b.textContent=`${psSel.size}명 정말 삭제`; setTimeout(()=>{ b.classList.remove("arm"); b.textContent="삭제"; },3500); return; }
+  b.classList.remove("arm"); b.textContent="삭제"; b.disabled=true;
+  const ids=[...psSel]; let n=0;
+  for(const id of ids){ const c=prospects.find(x=>x.id===id); if(!c) continue;
+    try{ await pcol.doc(id).delete(); n++; ibPurge("p:"+id); if(c.gcalId) gDel(c.gcalId); await delCustEvents("p:"+id,c.name); await pdrop(pAllFiles(c)); }catch(_){}
+  }
+  toast(`${n}명을 삭제했어요 (연락 기록·일정 포함)`); psSel=new Set(); psBulkUI();
+};
 $("psAdd").onclick=()=>pOpenEdit(null,todayStr());
 $("psQ").addEventListener("input",()=>{ psFilter.q=$("psQ").value; renderPS(); });
 $("psMonth").innerHTML='<option value="">전체 월</option>'+Array.from({length:12},(_,i)=>`<option value="${i+1}">${i+1}월</option>`).join("");
@@ -2360,9 +2512,10 @@ function renderProfit(){
 $("pYear").addEventListener("change",renderProfit);
 function showTab(t){
   if(["profit","pe","calc","fin"].includes(t) && !unlocked) t="ledger";
-  const map={cal:["viewCal","tabCal"],ps:["viewPS","tabPS"],ledger:["viewLedger","tabLedger"],alerts:["viewAlerts","tabAlerts"],care:["viewCare","tabCare"],profit:["viewProfit","tabProfit"],calc:["viewCalc","tabCalc"],fin:["viewFin","tabFin"],pe:["viewPE","tabPE"]};
+  const map={cal:["viewCal","tabCal"],ps:["viewPS","tabPS"],ledger:["viewLedger","tabLedger"],alerts:["viewAlerts","tabAlerts"],care:["viewCare","tabCare"],sms:["viewSms","tabSms"],profit:["viewProfit","tabProfit"],calc:["viewCalc","tabCalc"],fin:["viewFin","tabFin"],pe:["viewPE","tabPE"]};
   Object.entries(map).forEach(([k,[v,b]])=>{ $(v).hidden = k!==t; $(b).setAttribute("aria-selected", k===t); });
   currentTab=t;
+  if(t==="sms" && typeof smsLoad==="function") smsLoad(true);
   $("pcFab").hidden = t!=="cal"; $("pcToday").hidden = t!=="cal";
   try{ history.replaceState(null,"","#"+(["profit","pe","calc","fin"].includes(t)?"ledger":t)); }catch(_){}
 }
@@ -2392,6 +2545,7 @@ if(location.hash==="#ledger") showTab("ledger");
 if(location.hash==="#ps") showTab("ps");
 if(location.hash==="#alerts") showTab("alerts");
 if(location.hash==="#care") showTab("care");
+if(location.hash==="#sms") showTab("sms");
 
 // --- 엑셀(xlsx) 전체 저장
 function loadXLSX(){
@@ -2781,11 +2935,24 @@ async function ibSave(r,card,vals){
   }
   if(target.startsWith("c:")){
     const c=all.find(x=>x.id===target.slice(2)); if(!c||!col) throw "출고 고객을 찾을 수 없어요";
-    const line=`[${date}] ${label} · ${a.summary||""}${act?" → "+act:""}`;
-    await col.doc(c.id).update({memo:(c.memo?c.memo+"\n":"")+line, updatedAt:new Date().toISOString()});
+    // 출고 고객 통화·카톡은 메모가 아니라 상담 히스토리(연락 기록)에 날짜별로 쌓기
+    if(!pcol) throw "저장소에 연결되지 않았어요";
+    if(act) entry.note=act;
+    const hp=c.prospectId?prospects.find(x=>x.id===c.prospectId):null;
+    if(hp){
+      const logs=pMergeLog(hp.logs,entry);
+      await pcol.doc(hp.id).update({logs, lastContact:(hp.lastContact&&hp.lastContact>date)?hp.lastContact:date, updatedAt:new Date().toISOString()});
+      hp.logs=logs;
+    }else{
+      const hid="p"+puid(), now=new Date().toISOString();
+      const d={name:c.name||"", phone:c.phone||"", car:[c.model,c.trim].filter(Boolean).join(" "), source:"기타", stage:"출고 완료", referrer:c.referrer||"", pay:"미정",
+        nextDate:"", nextAction:"", inquiry:"", memo:"", files:[], logs:[entry], lastContact:date, customerId:c.id, deliveredAt:c.deliveredAt||c.registeredAt||"", createdAt:now, updatedAt:now};
+      await pcol.doc(hid).set(d); prospects.push(Object.assign({id:hid},d));
+      await col.doc(c.id).update({prospectId:hid, updatedAt:now}); c.prospectId=hid;
+    }
     if(next&&pevcol){ const now=new Date().toISOString(), eid="e"+puid(); const data={date:next,time:a.next_time||"",title:pBarLabel({name:c.name,car:c.model}),memo:act||a.summary||"",cat:"call",cust:"c:"+c.id,repeat:"",done:false,createdAt:now,updatedAt:now}; await pevcol.doc(eid).set(data); gSyncEvent(eid,data,null); }
     ibLastTarget="c:"+c.id;
-    return `${c.name||"출고 고객"}님 메모에 남겼어요${next?" · "+pshort(next)+" 연락 일정 추가":""}`;
+    return `${c.name||"출고 고객"}님 상담 히스토리에 남겼어요${next?" · "+pshort(next)+" 연락 일정 추가":""}`;
   }
   if(target.startsWith("p:")){
     const p=prospects.find(x=>x.id===target.slice(2)); if(!p) throw "가망 고객을 찾을 수 없어요";
@@ -2810,6 +2977,10 @@ async function ibSave(r,card,vals){
   const nid=(vals&&vals.nid)||"p"+puid();
   const data={name, phone:r.phone||a.phone||"", car, source:r.kind==="call"?"전화 문의":"기타", stage:stage||"신규 문의", pay:ibPay(a.payment),
     nextDate:next||"", nextAction:act||"", inquiry:String(a.inquiry||a.summary||"").slice(0,300), memo:det.join(" / "), files:[], logs:[entry], lastContact:date};
+  { const tags=[], ref=a.referrer||pRefFromContact(r.contact_name);
+    if(ref){ tags.push(String(ref).trim().replace(/\s*소개$/,"")+" 소개"); data.source="소개"; }
+    if(/^☆\s*출고/.test(String(r.contact_name||""))) tags.push("BMW 출고고객"); // ☆출고 = BMW 시절 출고 고객
+    if(tags.length) data.referrer=tags.join(", "); }
   if(r.kind==="call"&&r.contact_name) data.contactName=String(r.contact_name).trim();
   if(!(await psave(nid,data,true))) throw "저장하지 못했어요";
   if(!prospects.some(x=>x.id===nid)) prospects.push(Object.assign({id:nid},data)); // 같은 사람 다음 상담이 바로 여기에 붙도록
@@ -2864,6 +3035,200 @@ document.addEventListener("click",async e=>{
   }
 });
 
+
+// ===== 자동 문자: 관리 시스템이 발송 목록(서버)에 올리고 → 본폰 '상담 자동전송' 앱이 유심으로 보냄 → 보내면 연락 완료 자동 체크 =====
+const SMS_HOUR=14, SMS_MY="01077240439";
+let smsAsk=null, smsRows=[], smsSet=null, smsState="wait", smsErr="", smsBusy=false, smsSyncing=false, smsStarted=false, smsSyncT=null, smsFilter="up", smsEditId=null, smsOpen={};
+const smsDigits=p=>{ const d=ibDigits(p); return /^01\d{8,9}$/.test(d)?d:""; };
+const smsAddDays=(s,n)=>{ const [y,m,d]=s.split("-").map(Number); return dstr(new Date(y,m-1,d+n)); };
+const smsPhoneFmt=d=>d.length===11?`${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}`:d.length===10?`${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`:d;
+// 보낼 날짜 → 그날 오후 2시. 이미 지난 날짜(늦게 입력·놓친 것)면 오늘 오후 2시(이미 2시가 지났으면 바로)
+const smsSendAt=dateStr=>`${dateStr<todayStr()?todayStr():dateStr} ${pad(SMS_HOUR)}:00:00+09`;
+function smsWhen(v){
+  const d=ibTime(v); if(isNaN(d)) return "";
+  const t=todayStr(), ds=pymd(d), hm=`${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if(ds===t) return "오늘 "+hm; if(ds===smsAddDays(t,1)) return "내일 "+hm; if(ds===smsAddDays(t,-1)) return "어제 "+hm;
+  return `${d.getMonth()+1}.${d.getDate()} ${hm}`;
+}
+function smsAgo(v){
+  if(!v) return null; const d=ibTime(v); if(isNaN(d)) return null;
+  const m=Math.round((Date.now()-d)/60000);
+  return m<2?"방금":m<60?m+"분 전":m<1440?Math.round(m/60)+"시간 전":Math.round(m/1440)+"일 전";
+}
+// 지금 발송 목록에 있어야 할 문자 (지난 7일 ~ 앞으로 3일 사이 시점, 아직 연락 완료 안 한 것만)
+function smsWanted(){
+  const out=[], t=todayStr(), lo=smsAddDays(t,-7), hi=smsAddDays(t,3);
+  all.forEach(r=>{
+    if(r.isExample||r.smsOff) return;
+    const ph=smsDigits(r.phone); if(!ph) return;
+    const ci=careInfo(r);
+    if(ci) ci.steps.forEach(st=>{
+      if(st.done||st.date<lo||st.date>hi) return;
+      out.push({key:`c:${r.id}:m${st.m}`, cid:r.id, name:r.name||"", phone:ph, kind:st.m===0?"thanks":"care", label:careTitle(st.m), date:st.date, body:careMsg(r,st.m)});
+    });
+    const ex=nextExpiry(r.insuranceStart);
+    if(ex && ex.days>=3){
+      const c=contactOf(r,ex);
+      [["d60",60],["d30",30]].forEach(([k,n])=>{
+        const d=smsAddDays(ex.str,-n);
+        if(c[k]||d<lo||d>hi) return;
+        if(k==="d60" && (ex.days<=30 || c.d30)) return;
+        out.push({key:`c:${r.id}:ins${n}:${ex.str}`, cid:r.id, name:r.name||"", phone:ph, kind:"ins", label:`보험 만기 ${n}일 전`, date:d, body:insMsg(r,{str:ex.str, days:n})});
+      });
+    }
+  });
+  return out;
+}
+const smsKeyCust=k=>{ const m=String(k||"").match(/^c:(.+?):(m\d+|ins\d+:.+)$/); return m?m[1]:null; };
+function smsScheduleSync(ms){ clearTimeout(smsSyncT); smsSyncT=setTimeout(smsSync, ms??3000); }
+async function smsSync(){
+  if(!gmcp||!loaded||smsSyncing) return;
+  if(!all.length) { await smsLoad(); return; }
+  smsSyncing=true;
+  try{
+    const want=smsWanted(), wantMap=new Map(want.map(w=>[w.key,w]));
+    // 1) 새로 생긴 문자 등록 (이미 있는 건 그대로)
+    if(want.length){
+      const vals=want.map(w=>`(${sqlq(w.key)},${sqlq(w.cid)},${sqlq(w.name)},${sqlq(w.phone)},${sqlq(w.kind)},${sqlq(w.label)},${sqlq(w.body)},${sqlq(smsSendAt(w.date))})`).join(",");
+      await sbSql(`insert into public.sms_queue (key,customer_id,name,phone,kind,label,body,send_at) values ${vals} on conflict (key) do nothing`);
+    }
+    // 2) 예약된 문자: 고객 정보가 바뀌었으면 내용 갱신 / 더 이상 보낼 필요 없으면 취소
+    const sch=await sbSql("select id,key,name,phone,body,send_at,edited from public.sms_queue where status='scheduled' and key like 'c:%'");
+    for(const q of sch){
+      const w=wantMap.get(q.key);
+      if(!w){
+        const r=all.find(x=>x.id===smsKeyCust(q.key));
+        const why=!r?"고객이 삭제됨":r.smsOff?"이 고객 자동 문자 꺼짐":!smsDigits(r.phone)?"전화번호 없음":"연락 완료로 체크됨·날짜 변경";
+        await sbSql(`update public.sms_queue set status='canceled', note=${sqlq(why)}, updated_at=now() where id=${sqlq(q.id)} and status='scheduled'`);
+        continue;
+      }
+      if(q.edited) continue;
+      const sa=smsSendAt(w.date), same=+ibTime(q.send_at)===+ibTime(sa);
+      if(q.body!==w.body||q.phone!==w.phone||q.name!==w.name||!same)
+        await sbSql(`update public.sms_queue set body=${sqlq(w.body)}, phone=${sqlq(w.phone)}, name=${sqlq(w.name)}, send_at=${sqlq(sa)}, updated_at=now() where id=${sqlq(q.id)} and status='scheduled' and not edited`);
+    }
+    // 3) 보낸 문자 → 안부·보험 연락 완료 자동 체크
+    const sent=await sbSql("select id,key,sent_at from public.sms_queue where status='sent' and not applied and key like 'c:%'");
+    for(const s of sent){
+      const d=s.sent_at?pymd(ibTime(s.sent_at)):todayStr();
+      const r=all.find(x=>x.id===smsKeyCust(s.key));
+      let m;
+      if(r && col){
+        try{
+          if((m=s.key.match(/:m(\d+)$/))) { if(!(r.careCheck||{})["m"+m[1]]) await col.doc(r.id).update({careCheck:{["m"+m[1]]:d}}); }
+          else if((m=s.key.match(/:ins(60|30):(\d{4}-\d{2}-\d{2})$/))) { const k="d"+m[1]; if(!((r.insContact||{})[m[2]]||{})[k]) await col.doc(r.id).update({insContact:{[m[2]]:{[k]:d}}}); }
+        }catch(_){ continue; }
+      }
+      await sbSql(`update public.sms_queue set applied=true where id=${sqlq(s.id)}`);
+    }
+    await smsLoad(true);
+  }catch(err){ smsState="err"; smsErr=err&&err.code?ibErrText(err):"자동 문자 목록을 정리하지 못했어요"; renderSms(); }
+  finally{ smsSyncing=false; }
+}
+async function smsLoad(quiet){
+  if(!gmcp||smsBusy) return; smsBusy=true;
+  try{
+    const [set]=await sbSql("select enabled, send_hour, app_seen_at, app_info from public.sms_settings where id=1");
+    smsSet=set||{enabled:false};
+    smsRows=await sbSql("select id,key,customer_id,name,phone,kind,label,body,send_at,status,edited,sent_at,error,note,updated_at from public.sms_queue where status in ('scheduled','sending','failed') or updated_at > now() - interval '30 days' order by send_at asc limit 500");
+    smsState="ok"; smsErr="";
+  }catch(err){ smsState="err"; smsErr=err&&err.code?ibErrText(err):"자동 문자 목록을 불러오지 못했어요"; }
+  finally{ smsBusy=false; renderSms(); renderAlertBar(); }
+}
+function smsStart(){
+  if(smsStarted||!gmcp) return; smsStarted=true;
+  smsLoad(); smsScheduleSync(5000);
+  setInterval(()=>{ if(document.visibilityState==="visible") smsSync(); }, 5*60000);
+  setInterval(()=>{ if(document.visibilityState==="visible" && currentTab==="sms") smsLoad(true); }, 60000);
+}
+function smsFailedN(){ return smsRows.filter(q=>q.status==="failed").length; }
+function smsAppOff(){
+  if(!smsSet||!smsSet.enabled) return false;
+  const h=new Date().getHours(); if(h<9||h>=21) return false;
+  if(!smsSet.app_seen_at) return true;
+  return Date.now()-ibTime(smsSet.app_seen_at) > 3*3600000;
+}
+const SMS_ST={scheduled:["예정","need"],sending:["보내는 중","need"],sent:["보냄","done"],failed:["실패","fail"],canceled:["보내지 않음","off"]};
+const SMS_KIND={thanks:"🎉",care:"💬",ins:"📅",test:"🧪",manual:"✉️"};
+function smsCard(q){
+  const [stTxt,stCls]=SMS_ST[q.status]||[q.status,""];
+  const when = q.status==="sent" ? "보낸 시각 "+smsWhen(q.sent_at) : q.status==="scheduled" ? "보낼 시각 "+smsWhen(q.send_at) : "예정 "+smsWhen(q.send_at);
+  const open=!!smsOpen[q.id], editing=smsEditId===q.id, cid=smsKeyCust(q.key);
+  const tools=[];
+  if(q.status==="scheduled"){ tools.push(`<button class="check" type="button" data-sms-edit="${q.id}">문구 수정</button>`,`<button class="check" type="button" data-sms-now="${q.id}">지금 보내기</button>`,`<button class="check" type="button" data-sms-cancel="${q.id}">보내지 않기</button>`); }
+  if(q.status==="failed"){ tools.push(`<button class="check due" type="button" data-sms-retry="${q.id}">다시 보내기</button>`,`<button class="check" type="button" data-sms-cancel="${q.id}">보내지 않기</button>`); }
+  if(q.status==="canceled" && q.key.startsWith("c:")){ tools.push(`<button class="check" type="button" data-sms-retry="${q.id}">다시 예약</button>`); }
+  if(cid && ["scheduled","failed"].includes(q.status)) tools.push(smsAsk===("off:"+q.id)
+    ? `<span class="confirm">이 고객에게는 앞으로 자동 문자를 안 보낼까요?</span><button class="btn danger" type="button" data-sms-off="${esc(cid)}">끄기</button><button class="btn ghost" type="button" data-sms-askx="1">취소</button>`
+    : `<button class="btn ghost" type="button" data-sms-ask="off:${q.id}">이 고객 자동 문자 끄기</button>`);
+  return `<article class="smscard st-${stCls}">
+    <div class="sm-top"><div style="min-width:0"><b>${SMS_KIND[q.kind]||"✉️"} ${esc(q.name||"(이름 없음)")}</b><span class="status ${stCls==="done"?"done":"need"} ${stCls}">${stTxt}</span>${q.edited?'<span class="badge ex">직접 수정</span>':""}
+      <div class="meta">${esc(q.label||"")} · <span class="mono">${esc(smsPhoneFmt(q.phone||""))}</span></div></div>
+      <div class="sm-when">${when}</div></div>
+    ${q.error?`<div class="sm-err">⚠ ${esc(q.error)}</div>`:""}${q.status==="canceled"&&q.note?`<div class="meta">사유: ${esc(q.note)}</div>`:""}
+    ${editing?`<textarea class="sm-ta" id="smsTa" rows="10">${esc(q.body)}</textarea><div class="tools"><button class="btn primary" type="button" data-sms-save="${q.id}">저장</button><button class="btn ghost" type="button" data-sms-editx="1">취소</button></div>`
+      :`<button class="sm-body${open?" open":""}" type="button" data-sms-open="${q.id}" aria-expanded="${open}">${esc(q.body)}</button>`}
+    ${!editing&&tools.length?`<div class="tools">${tools.join("")}</div>`:""}
+  </article>`;
+}
+function renderSms(){
+  const v=$("viewSms"); if(!v) return;
+  const t=todayStr();
+  const up=smsRows.filter(q=>["scheduled","sending"].includes(q.status));
+  const today=up.filter(q=>pymd(ibTime(q.send_at))<=t);
+  const sent=smsRows.filter(q=>q.status==="sent").reverse();
+  const failed=smsRows.filter(q=>q.status==="failed");
+  const canceled=smsRows.filter(q=>q.status==="canceled").reverse();
+  $("smsBadge").textContent=failed.length; $("smsBadge").hidden=!failed.length;
+  $("sToday").textContent=today.length; $("sUp").textContent=up.length; $("sSent").textContent=sent.length; $("sFail").textContent=failed.length;
+  document.querySelectorAll("[data-sf]").forEach(b=>b.classList.toggle("on",b.dataset.sf===smsFilter));
+  const on=!!(smsSet&&smsSet.enabled);
+  const sw=$("smsSwitch"); sw.setAttribute("aria-pressed",on); sw.textContent=on?"자동 발송 켜짐":"자동 발송 꺼짐"; sw.disabled=smsState!=="ok";
+  const seen=smsSet&&smsAgo(smsSet.app_seen_at);
+  $("smsPhone").innerHTML = smsState==="wait" ? "불러오는 중…" : smsState==="err" ? `<span style="color:var(--danger)">${esc(smsErr)}</span>`
+    : seen ? `📱 본폰 앱 마지막 연결 <b>${seen}</b>${smsAppOff()?' <span style="color:var(--danger)">· 폰 앱이 오래 연결되지 않았어요. 앱을 한 번 열어 주세요</span>':""}`
+    : `📱 본폰 앱이 아직 연결되지 않았어요. <b>상담 자동전송 1.4</b>를 설치하고 문자 권한을 허용해 주세요`;
+  $("smsOffNote").hidden=on||smsState!=="ok";
+  const nPast=smsRows.filter(q=>q.status==="scheduled"&&ibTime(q.send_at)<=Date.now()).length;
+  $("smsAskOn").hidden=smsAsk!=="on"; $("smsAskN").textContent=nPast;
+  let list=[], empty="";
+  if(smsFilter==="up"){ list=up; empty="보낼 예정인 문자가 없어요. 안부·보험 시점 3일 전에 자동으로 올라와요."; }
+  if(smsFilter==="sent"){ list=sent; empty="최근 30일 동안 보낸 문자가 없어요."; }
+  if(smsFilter==="fail"){ list=failed; empty="실패한 문자가 없어요."; }
+  if(smsFilter==="off"){ list=canceled; empty="보내지 않기로 한 문자가 없어요."; }
+  $("smsList").innerHTML = smsState!=="ok" ? "" : list.length ? list.map(smsCard).join("") : `<div class="empty">${empty}</div>`;
+  const offs=all.filter(r=>r.smsOff);
+  $("smsOffList").innerHTML = offs.length ? `<span class="meta">자동 문자 끈 고객:</span> ${offs.map(r=>`<button class="chip" type="button" data-sms-on="${esc(r.id)}" title="다시 켜기">${esc(r.name||"(이름 없음)")} ✕</button>`).join(" ")}` : "";
+}
+async function smsDo(q, msg){ try{ await sbSql(q); if(msg) toast(msg); }catch(err){ toast(err&&err.code?ibErrText(err):"처리하지 못했어요. 잠시 후 다시 시도해 주세요."); } await smsLoad(true); }
+document.querySelectorAll("[data-sf]").forEach(b=>b.onclick=()=>{ smsFilter=b.dataset.sf; renderSms(); });
+$("smsSwitch").onclick=async()=>{
+  const on=!(smsSet&&smsSet.enabled);
+  if(on && smsAsk!=="on"){
+    const n=smsRows.filter(q=>q.status==="scheduled"&&ibTime(q.send_at)<=Date.now()).length;
+    if(n){ smsAsk="on"; renderSms(); return; }
+  }
+  smsAsk=null;
+  await smsDo(`update public.sms_settings set enabled=${on}, updated_at=now() where id=1`, on?"자동 발송을 켰어요. 매일 오후 2시에 본폰에서 나가요.":"자동 발송을 껐어요. 목록은 그대로 남아요.");
+};
+$("smsAskCancel").onclick=()=>{ smsAsk=null; renderSms(); };
+$("smsTest").onclick=()=>smsDo(`insert into public.sms_queue (key,name,phone,kind,label,body,send_at) values (${sqlq("test:"+Date.now())},'내 폰 테스트',${sqlq(SMS_MY)},'test','테스트 문자',${sqlq("자동 문자 테스트예요 😊\n이 문자가 잘 보이면 본폰 자동 발송이 정상이에요.\n\n"+MSG_SIGN)},now())`, "테스트 문자를 올렸어요. 본폰 앱이 가져가면 1~5분 안에 내 폰으로 와요.");
+$("smsRefresh").onclick=()=>{ toast("목록을 다시 정리하고 있어요"); smsSync(); };
+$("viewSms").addEventListener("click",async e=>{
+  const b=e.target.closest("button"); if(!b) return; const d=b.dataset;
+  if(d.smsOpen){ smsOpen[d.smsOpen]=!smsOpen[d.smsOpen]; renderSms(); return; }
+  if(d.smsEdit){ smsEditId=d.smsEdit; renderSms(); const ta=$("smsTa"); if(ta) ta.focus(); return; }
+  if(d.smsEditx){ smsEditId=null; renderSms(); return; }
+  if(d.smsSave){ const txt=($("smsTa").value||"").trim(); if(!txt){ toast("문구가 비어 있어요."); return; } smsEditId=null; await smsDo(`update public.sms_queue set body=${sqlq(txt)}, edited=true, updated_at=now() where id=${sqlq(d.smsSave)} and status='scheduled'`,"문구를 고쳤어요."); return; }
+  if(d.smsNow){ await smsDo(`update public.sms_queue set send_at=now(), edited=true, updated_at=now() where id=${sqlq(d.smsNow)} and status='scheduled'`, smsSet&&smsSet.enabled?"본폰 앱이 다음 확인 때(5분 안) 보내요.":"자동 발송이 꺼져 있어요. 켜야 나가요."); return; }
+  if(d.smsCancel){ await smsDo(`update public.sms_queue set status='canceled', note='직접 취소', updated_at=now() where id=${sqlq(d.smsCancel)} and status in ('scheduled','failed')`,"이 문자는 보내지 않아요."); return; }
+  if(d.smsRetry){ await smsDo(`update public.sms_queue set status='scheduled', error=null, note=null, edited=true, send_at=greatest(now(), send_at), updated_at=now() where id=${sqlq(d.smsRetry)} and status in ('failed','canceled')`,"다시 보내도록 예약했어요."); return; }
+  if(d.smsAsk){ smsAsk=d.smsAsk; renderSms(); return; }
+  if(d.smsAskx){ smsAsk=null; renderSms(); return; }
+  if(d.smsOff && col){ smsAsk=null; try{ await col.doc(d.smsOff).update({smsOff:true}); toast("이 고객 자동 문자를 껐어요."); }catch(_){ toast("저장하지 못했어요."); } smsScheduleSync(500); return; }
+  if(d.smsOn && col){ try{ await col.doc(d.smsOn).update({smsOff:false}); toast("자동 문자를 다시 켰어요."); }catch(_){ toast("저장하지 못했어요."); } smsScheduleSync(500); return; }
+});
+
 // --- boot
 render();
 (async()=>{
@@ -2872,10 +3237,10 @@ render();
   col = db.collection("customers");
   try{ passets = await claude.use("assets"); }catch(_){ passets=null; }
   pevcol = db.collection("events");
-  Promise.resolve(claude.use("mcp")).then(m=>{ gmcp=m||null; if(gmcp){ gSet("wait"); gRange=""; gWatch(); ibStart(); } }).catch(()=>{ gmcp=null; });
+  Promise.resolve(claude.use("mcp")).then(m=>{ gmcp=m||null; if(gmcp){ gSet("wait"); gRange=""; gWatch(); ibStart(); smsStart(); } }).catch(()=>{ gmcp=null; });
   pevcol.onSnapshot(snap=>{ pevents=snap.docs.map(d=>Object.assign({id:d.id},d.data())); renderPC(); renderAlertBar(); if(pKind==="day") pOpenDay(pArg); }, ()=>{});
   pcol = db.collection("prospects");
-  pcol.onSnapshot(snap=>{ prospects=snap.docs.map(d=>Object.assign({id:d.id},d.data())); ploaded=true; renderPC(); renderAlertBar(); pRefresh(); pAutoNewcar(); if(all.some(r=>r.prospectId)) render(); }, ()=>{ ploaded=true; poffline=true; renderPC(); });
+  pcol.onSnapshot(snap=>{ prospects=snap.docs.map(d=>Object.assign({id:d.id},d.data())); ploaded=true; renderPC(); renderAlertBar(); pRefresh(); pAutoNewcar(); pDoneSync(); if(all.some(r=>r.prospectId)) render(); }, ()=>{ ploaded=true; poffline=true; renderPC(); });
   if(await claude.use("downloads")) $("csvBtn").hidden=false;
   ratesCol = db.collection("rates");
   settingsCol = db.collection("settings");
@@ -2887,7 +3252,7 @@ render();
   settingsCol.doc("inbox").onSnapshot(snap=>{ const d=snap.exists?snap.data():null; ibAutoOn = !(d && d.auto===false); if(pKind==="inbox") ibRender(); }, ()=>{});
   settingsCol.doc("finance").onSnapshot(snap=>{ finDoc = snap.exists ? snap.data() : null; renderFin(); }, ()=>{});
   ratesCol.onSnapshot(snap=>{ rateDocs={}; snap.docs.forEach(d=>{ rateDocs[d.id]=d.data(); }); renderCalc(); }, ()=>{});
-  col.onSnapshot(snap=>{ const docs=snap.docs.map(d=>Object.assign({id:d.id},d.data())); all=docs.filter(r=>!r.canceled); canceledCust=docs.filter(r=>r.canceled); loaded=true; render(); },
+  col.onSnapshot(snap=>{ const docs=snap.docs.map(d=>Object.assign({id:d.id},d.data())); all=docs.filter(r=>!r.canceled); canceledCust=docs.filter(r=>r.canceled); loaded=true; render(); pDoneSync(); if(typeof smsScheduleSync==="function") smsScheduleSync(); },
     err=>{ loaded=true; $("notice").hidden=false; $("notice").textContent="목록을 불러오지 못했어요. 페이지를 새로고침해 주세요."; render(); });
 })();
 })();

@@ -172,6 +172,7 @@ object Sched {
 
     fun start(ctx: Context) {
         WatchService.start(ctx)
+        SmsSender.start(ctx)
         val periodic = PeriodicWorkRequestBuilder<ScanWorker>(Duration.ofMinutes(15))
             .setConstraints(net).build()
         WorkManager.getInstance(ctx).enqueueUniquePeriodicWork("scan-periodic", ExistingPeriodicWorkPolicy.KEEP, periodic)

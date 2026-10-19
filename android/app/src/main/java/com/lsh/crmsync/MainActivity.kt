@@ -29,8 +29,8 @@ class MainActivity : AppCompatActivity() {
 
     private val perms: Array<String>
         get() = if (Build.VERSION.SDK_INT >= 33)
-            arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.POST_NOTIFICATIONS)
-        else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.SEND_SMS)
+        else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.SEND_SMS)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -74,7 +74,7 @@ class MainActivity : AppCompatActivity() {
 
         section(root, "① 권한")
         root.addView(Button(this).apply {
-            text = "사진·오디오 접근 허용"
+            text = "사진·오디오·문자 보내기 권한 허용"
             setOnClickListener { requestPermissions(perms, 1) }
         })
         root.addView(Button(this).apply {
@@ -135,7 +135,23 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        section(root, "④ 수동 실행")
+        section(root, "④ 자동 문자 (안부·감사·보험 만기)")
+        root.addView(TextView(this).apply {
+            text = "관리 시스템 '자동 문자' 탭에 예약된 문자를 이 폰 번호로 보내요. 매일 오후 2시 무렵(5~15분 안) 나가고, 보낸 문자는 메시지 앱에도 남아요. 켜고 끄기는 관리 시스템에서 해요."
+            textSize = 12.5f
+        })
+        root.addView(sw("✉️ 이 폰에서 자동 문자 보내기", { prefs.autoSmsOn }) { prefs.autoSmsOn = it })
+        root.addView(Button(this).apply {
+            text = "지금 보낼 문자 확인"
+            setOnClickListener {
+                if (!SmsSender.hasPermission(this@MainActivity)) { requestPermissions(arrayOf(Manifest.permission.SEND_SMS), 2); return@setOnClickListener }
+                SmsSender.runNow(this@MainActivity)
+                Toast.makeText(this@MainActivity, "확인 중… 보낼 문자가 있으면 바로 나가요", Toast.LENGTH_SHORT).show()
+                log.postDelayed({ refresh() }, 12000)
+            }
+        })
+
+        section(root, "⑤ 수동 실행")
         root.addView(Button(this).apply {
             text = "지금 바로 확인해서 보내기"
             setOnClickListener {
@@ -162,7 +178,7 @@ class MainActivity : AppCompatActivity() {
         return ScrollView(this).apply { addView(root) }
     }
 
-    private fun hasPerms() = perms.filter { it != Manifest.permission.POST_NOTIFICATIONS }
+    private fun hasPerms() = perms.filter { it != Manifest.permission.POST_NOTIFICATIONS && it != Manifest.permission.SEND_SMS }
         .all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
 
     private fun batteryOk(): Boolean {
@@ -187,6 +203,7 @@ class MainActivity : AppCompatActivity() {
     private fun refresh() {
         val lines = mutableListOf<String>()
         lines += if (hasPerms()) "✅ 사진·오디오 접근 허용됨" else "⚠️ 사진·오디오 접근 권한이 필요해요"
+        lines += if (SmsSender.hasPermission(this)) "✅ 문자 보내기 허용됨 (자동 문자)" else "⚠️ 자동 문자를 쓰려면 '문자 보내기' 권한을 허용해 주세요"
         lines += if (batteryOk()) "✅ 배터리 최적화 제외됨" else "⚠️ 배터리 최적화 제외를 해주세요 (안 하면 전송이 늦어져요)"
         lines += if (prefs.token.isNotBlank()) "✅ 서버 연결 정보 저장됨" else "⚠️ 앱 출입증을 넣고 저장해 주세요"
         status.text = lines.joinToString("\n")
