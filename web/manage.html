@@ -476,6 +476,14 @@ label.full{grid-column:1/-1}
 #smsSwitch[aria-pressed="false"]{border-color:var(--warn);color:var(--warn)}
 .stats.four{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:560px){.stats.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.holbox{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.holbox .ex-head{display:flex;flex-direction:column;gap:2px}
+.hol-row{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.hol-row:first-child{border-top:none;padding-top:0}
+.hol-row.off b{color:var(--muted)}
+.hol-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center}
+.hol-top .tools{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:560px){.hol-top{grid-template-columns:minmax(0,1fr)}.hol-top .tools{justify-content:flex-start}}
 #smsOffList .chip{font:inherit;font-size:12px;border:none;cursor:pointer}
 </style>
 
@@ -538,6 +546,10 @@ label.full{grid-column:1/-1}
       <div style="display:flex;flex-direction:column;gap:4px;min-width:0"><div class="meta" id="smsPhone">불러오는 중…</div><div class="confirm" id="smsAskOn" hidden>켜면 보낼 시각이 지난 문자 <b id="smsAskN">0</b>건이 바로 나가요. 오른쪽 버튼을 한 번 더 누르면 켜져요. <button class="btn ghost" type="button" id="smsAskCancel">취소</button></div><div class="meta" id="smsOffNote" hidden>지금은 <b>꺼져 있어서</b> 목록만 만들어지고 실제로 나가진 않아요. 목록을 확인하고 켜 주세요.</div></div>
       <div class="actions"><button class="btn" id="smsTest" type="button">내 폰으로 테스트</button><button class="btn" id="smsRefresh" type="button">새로고침</button><button class="btn" id="smsSwitch" type="button" aria-pressed="false" disabled>자동 발송 꺼짐</button></div>
     </div>
+    <section class="holbox">
+      <div class="ex-head"><b style="font-size:15px">명절·기념일 인사</b><span class="meta">출고 고객 전체에게 이름과 차종을 넣어 한 명씩 보내요. 발송 7일 전부터 아래 목록에 올라오니, 빼고 싶은 분은 그때 "보내지 않기"를 누르면 돼요.</span></div>
+      <div id="holList"></div>
+    </section>
     <div class="stats four" id="smsFilters">
       <button class="stat warn" type="button" data-sf="up"><div class="k">오늘 보낼 문자</div><div class="v" id="sToday">–</div></button>
       <button class="stat" type="button" data-sf="up"><div class="k">예정 (3일 안)</div><div class="v" id="sUp">–</div></button>
@@ -3038,7 +3050,7 @@ document.addEventListener("click",async e=>{
 
 // ===== 자동 문자: 관리 시스템이 발송 목록(서버)에 올리고 → 본폰 '상담 자동전송' 앱이 유심으로 보냄 → 보내면 연락 완료 자동 체크 =====
 const SMS_HOUR=14, SMS_MY="01077240439";
-let smsAsk=null, smsRows=[], smsSet=null, smsState="wait", smsErr="", smsBusy=false, smsSyncing=false, smsStarted=false, smsSyncT=null, smsFilter="up", smsEditId=null, smsOpen={};
+let holLoaded=false, smsAsk=null, smsRows=[], smsSet=null, smsState="wait", smsErr="", smsBusy=false, smsSyncing=false, smsStarted=false, smsSyncT=null, smsFilter="up", smsEditId=null, smsOpen={};
 const smsDigits=p=>{ const d=ibDigits(p); return /^01\d{8,9}$/.test(d)?d:""; };
 const smsAddDays=(s,n)=>{ const [y,m,d]=s.split("-").map(Number); return dstr(new Date(y,m-1,d+n)); };
 const smsPhoneFmt=d=>d.length===11?`${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}`:d.length===10?`${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`:d;
@@ -3077,12 +3089,12 @@ function smsWanted(){
       });
     }
   });
-  return out;
+  return out.concat(holWanted());
 }
-const smsKeyCust=k=>{ const m=String(k||"").match(/^c:(.+?):(m\d+|ins\d+:.+)$/); return m?m[1]:null; };
+const smsKeyCust=k=>{ const m=String(k||"").match(/^c:(.+?):(m\d+|ins\d+:.+|hol:.+)$/); return m?m[1]:null; };
 function smsScheduleSync(ms){ clearTimeout(smsSyncT); smsSyncT=setTimeout(smsSync, ms??3000); }
 async function smsSync(){
-  if(!gmcp||!loaded||smsSyncing) return;
+  if(!gmcp||!loaded||!holLoaded||smsSyncing) return;
   if(!all.length) { await smsLoad(); return; }
   smsSyncing=true;
   try{
@@ -3098,7 +3110,7 @@ async function smsSync(){
       const w=wantMap.get(q.key);
       if(!w){
         const r=all.find(x=>x.id===smsKeyCust(q.key));
-        const why=!r?"고객이 삭제됨":r.smsOff?"이 고객 자동 문자 꺼짐":!smsDigits(r.phone)?"전화번호 없음":"연락 완료로 체크됨·날짜 변경";
+        const why=!r?"고객이 삭제됨":r.smsOff?"이 고객 자동 문자 꺼짐":!smsDigits(r.phone)?"전화번호 없음":/:hol:/.test(q.key)?"명절 인사 꺼짐·날짜 지남":"연락 완료로 체크됨·날짜 변경";
         await sbSql(`update public.sms_queue set status='canceled', note=${sqlq(why)}, updated_at=now() where id=${sqlq(q.id)} and status='scheduled'`);
         continue;
       }
@@ -3149,7 +3161,7 @@ function smsAppOff(){
   return Date.now()-ibTime(smsSet.app_seen_at) > 3*3600000;
 }
 const SMS_ST={scheduled:["예정","need"],sending:["보내는 중","need"],sent:["보냄","done"],failed:["실패","fail"],canceled:["보내지 않음","off"]};
-const SMS_KIND={thanks:"🎉",care:"💬",ins:"📅",test:"🧪",manual:"✉️"};
+const SMS_KIND={thanks:"🎉",care:"💬",ins:"📅",test:"🧪",manual:"✉️",hol:"💌"};
 function smsCard(q){
   const [stTxt,stCls]=SMS_ST[q.status]||[q.status,""];
   const when = q.status==="sent" ? "보낸 시각 "+smsWhen(q.sent_at) : q.status==="scheduled" ? "보낼 시각 "+smsWhen(q.send_at) : "예정 "+smsWhen(q.send_at);
@@ -3187,7 +3199,7 @@ function renderSms(){
   const seen=smsSet&&smsAgo(smsSet.app_seen_at);
   $("smsPhone").innerHTML = smsState==="wait" ? "불러오는 중…" : smsState==="err" ? `<span style="color:var(--danger)">${esc(smsErr)}</span>`
     : seen ? `📱 본폰 앱 마지막 연결 <b>${seen}</b>${smsAppOff()?' <span style="color:var(--danger)">· 폰 앱이 오래 연결되지 않았어요. 앱을 한 번 열어 주세요</span>':""}`
-    : `📱 본폰 앱이 아직 연결되지 않았어요. <b>상담 자동전송 1.4</b>를 설치하고 문자 권한을 허용해 주세요`;
+    : `📱 본폰 앱이 아직 연결되지 않았어요. <b>상담 자동전송 앱(1.4.2 이상)</b>을 설치하고 문자 권한을 허용해 주세요`;
   $("smsOffNote").hidden=on||smsState!=="ok";
   const nPast=smsRows.filter(q=>q.status==="scheduled"&&ibTime(q.send_at)<=Date.now()).length;
   $("smsAskOn").hidden=smsAsk!=="on"; $("smsAskN").textContent=nPast;
@@ -3198,6 +3210,7 @@ function renderSms(){
   if(smsFilter==="off"){ list=canceled; empty="보내지 않기로 한 문자가 없어요."; }
   $("smsList").innerHTML = smsState!=="ok" ? "" : list.length ? list.map(smsCard).join("") : `<div class="empty">${empty}</div>`;
   const offs=all.filter(r=>r.smsOff);
+  renderHol();
   $("smsOffList").innerHTML = offs.length ? `<span class="meta">자동 문자 끈 고객:</span> ${offs.map(r=>`<button class="chip" type="button" data-sms-on="${esc(r.id)}" title="다시 켜기">${esc(r.name||"(이름 없음)")} ✕</button>`).join(" ")}` : "";
 }
 async function smsDo(q, msg){ try{ await sbSql(q); if(msg) toast(msg); }catch(err){ toast(err&&err.code?ibErrText(err):"처리하지 못했어요. 잠시 후 다시 시도해 주세요."); } await smsLoad(true); }
@@ -3229,6 +3242,94 @@ $("viewSms").addEventListener("click",async e=>{
   if(d.smsOn && col){ try{ await col.doc(d.smsOn).update({smsOff:false}); toast("자동 문자를 다시 켰어요."); }catch(_){ toast("저장하지 못했어요."); } smsScheduleSync(500); return; }
 });
 
+
+// --- 명절·기념일 인사: 출고 고객 전체에게 설·추석·크리스마스·새해 인사를 자동 문자로
+// 설·추석 연휴 시작일 (한국천문연구원 기준 공휴일). 해가 바뀌면 여기에 다음 해를 추가
+const HOL_LUNAR = {
+  seol:    {2027:"2027-02-06", 2028:"2028-01-26", 2029:"2029-02-12", 2030:"2030-02-02"},
+  chuseok: {2026:"2026-09-24", 2027:"2027-09-14", 2028:"2028-10-02", 2029:"2029-09-21", 2030:"2030-09-11"}
+};
+const HOL_DEF = [
+  {id:"seol", name:"설날", icon:"🧧", when:"연휴 시작 이틀 전",
+   text:`안녕하세요 {이름} 😊\n현대자동차 신대치대리점 이성훈 차장입니다.\n\n벌써 설 명절이 다가왔네요.\n{차종} 타시면서 불편한 곳은 없으시죠?\n\n고향 가시는 길 장거리 운전 전에 타이어 공기압이랑 워셔액 한 번만 확인해 주세요.\n막히는 길에서는 중간중간 꼭 쉬어 가시고요!\n\n새해 복 많이 받으시고, 가족분들과 따뜻하고 넉넉한 설 보내세요 🙏\n\n{서명}`},
+  {id:"chuseok", name:"추석", icon:"🌕", when:"연휴 시작 이틀 전",
+   text:`안녕하세요 {이름} 😊\n현대자동차 신대치대리점 이성훈 차장입니다.\n\n어느새 추석이 코앞이네요.\n{차종} 잘 타고 계시죠?\n\n연휴에 장거리 운전하실 일 있으시면 출발 전에 타이어랑 냉각수 한 번만 봐주세요.\n길이 많이 막히니 졸릴 땐 꼭 쉬어 가시고요!\n\n보름달처럼 넉넉하고 풍성한 한가위 보내세요 🌕\n\n{서명}`},
+  {id:"xmas", name:"크리스마스", icon:"🎄", when:"12월 24일",
+   text:`안녕하세요 {이름} 😊\n현대자동차 신대치대리점 이성훈 차장입니다.\n\n어느덧 한 해의 끝자락, 크리스마스가 왔네요 🎄\n늘 저를 믿고 찾아주셔서 정말 감사드려요.\n\n요즘 아침저녁으로 길이 얼어 있을 때가 많아서, 다리 위나 그늘진 곳은 조금만 천천히 다녀 주세요.\n\n소중한 분들과 따뜻하고 행복한 크리스마스 보내세요!\n\n{서명}`},
+  {id:"newyear", name:"새해", icon:"🎍", when:"12월 31일",
+   text:`안녕하세요 {이름} 😊\n현대자동차 신대치대리점 이성훈 차장입니다.\n\n{새해} 새해가 밝아오네요.\n올 한 해 저를 믿고 함께해 주셔서 정말 감사했습니다 🙏\n\n새해에도 늘 안전운전 하시고,\n하시는 일 모두 잘 되시길 진심으로 응원하겠습니다.\n\n새해 복 많이 받으세요!\n\n{서명}`}
+];
+const HOL_PER_DAY = 80; // 하루에 이 인원이 넘으면 전날로 나눠서 보냄 (본번호 보호)
+let smsHol = {}; // settings/smsHoliday: {seol:{on:true,text:"..."}, ...}
+let holEditId = null;
+const holOn = id => !(smsHol[id] && smsHol[id].on === false);
+const holText = d => (smsHol[d.id] && smsHol[d.id].text) || d.text;
+// 다음 발송 일정: {key, year, send, until, label}
+function holNext(d){
+  const t = todayStr(), y0 = +t.slice(0,4), out = [];
+  for (let y = y0 - 1; y <= y0 + 1; y++) {
+    if (d.id === "seol" || d.id === "chuseok") {
+      const st = HOL_LUNAR[d.id][y]; if (!st) continue;
+      out.push({year:y, send:smsAddDays(st,-2), until:st, label:`${y}년 ${d.name}`});
+    }
+    if (d.id === "xmas") out.push({year:y, send:`${y}-12-24`, until:`${y}-12-25`, label:`${y}년 크리스마스`});
+    if (d.id === "newyear") out.push({year:y+1, send:`${y}-12-31`, until:`${y+1}-01-01`, label:`${y+1}년 새해`});
+  }
+  return out.filter(o => o.until >= t).sort((a,b)=>a.send.localeCompare(b.send))[0] || null;
+}
+function holBody(d, r, n){
+  return holText(d).replace(/\{이름\}/g, msgName(r)).replace(/\{차종\}/g, msgCar(r)).replace(/\{서명\}/g, MSG_SIGN).replace(/\{새해\}/g, (n.year)+"년");
+}
+function holTargets(n){
+  // 출고 고객 중 번호 있고, 자동 문자 안 끈 고객 (발송 3일 안쪽에 출고한 고객은 감사 문자와 겹쳐서 제외)
+  return all.filter(r => !r.isExample && !r.smsOff && smsDigits(r.phone) && !(r.deliveredAt && r.deliveredAt > smsAddDays(n.send,-3)))
+    .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+}
+// smsWanted()에 더해짐: 발송 7일 전부터 목록에 올라옴
+function holWanted(){
+  const out = [], t = todayStr(), hi = smsAddDays(t,7);
+  HOL_DEF.forEach(d => {
+    if (!holOn(d.id)) return;
+    const n = holNext(d); if (!n || n.send > hi) return;
+    const list = holTargets(n);
+    list.forEach((r,i) => {
+      const day = smsAddDays(n.send, -Math.floor(i / HOL_PER_DAY)); // 많으면 하루씩 앞당겨 나눔
+      out.push({key:`c:${r.id}:hol:${d.id}${n.year}`, cid:r.id, name:r.name||"", phone:smsDigits(r.phone), kind:"hol", label:`${d.name} 인사`, date:day, body:holBody(d,r,n)});
+    });
+  });
+  return out;
+}
+const pwdOf = s => { const [y,m,dd]=s.split("-").map(Number); return PWD[new Date(y,m-1,dd).getDay()]; };
+function renderHol(){
+  const box = $("holList"); if (!box) return;
+  box.innerHTML = HOL_DEF.map(d => {
+    const n = holNext(d), on = holOn(d.id), cnt = n ? holTargets(n).length : 0, days = n ? Math.ceil(cnt / HOL_PER_DAY) : 0;
+    const when = n ? `${fmt(n.send)}(${pwdOf(n.send)}) 오후 2시${days>1?` 포함 ${days}일에 나눠서`:""}` : "다음 날짜 미정";
+    const editing = holEditId === d.id, custom = !!(smsHol[d.id] && smsHol[d.id].text);
+    return `<div class="hol-row${on?"":" off"}">
+      <div class="hol-top"><div style="min-width:0"><b>${d.icon} ${d.name}</b>${custom?'<span class="badge ex">문구 수정함</span>':""}
+        <div class="meta">${n?esc(n.label)+" · ":""}${d.when} · <span class="mono">${when}</span> · 출고 고객 <b>${cnt}</b>명</div></div>
+        <div class="tools"><button class="check" type="button" data-hol-edit="${d.id}">${editing?"닫기":"문구 보기"}</button><button class="check${on?" on":""}" type="button" data-hol-on="${d.id}" aria-pressed="${on}">${on?"켜짐":"꺼짐"}</button></div></div>
+      ${editing?`<textarea class="sm-ta" id="holTa" rows="12">${esc(holText(d))}</textarea>
+        <div class="hint">{이름} → "홍길동 고객님", {차종} → 고객 차종, {서명} → 지점·이름·번호${d.id==="newyear"?', {새해} → "2027년"':""} 으로 바뀌어 들어가요.</div>
+        <div class="tools"><button class="btn primary" type="button" data-hol-save="${d.id}">문구 저장</button>${custom?`<button class="btn ghost" type="button" data-hol-reset="${d.id}">기본 문구로</button>`:""}</div>`:""}
+    </div>`;
+  }).join("");
+}
+async function holSave(patch){
+  const next = Object.assign({}, smsHol);
+  Object.entries(patch).forEach(([k,v]) => { next[k] = Object.assign({}, next[k]||{}, v); });
+  try { await settingsCol.doc("smsHoliday").set(Object.assign(next, {updatedAt:new Date().toISOString()})); return true; }
+  catch(_) { toast("저장하지 못했어요. 잠시 후 다시 시도해 주세요."); return false; }
+}
+$("holList").addEventListener("click", async e => {
+  const b = e.target.closest("button"); if (!b) return; const d = b.dataset;
+  if (d.holEdit) { holEditId = holEditId === d.holEdit ? null : d.holEdit; renderHol(); return; }
+  if (d.holOn) { const on = !holOn(d.holOn); if (await holSave({[d.holOn]:{on}})) { toast(on?"켰어요. 발송 7일 전부터 아래 목록에 올라와요.":"껐어요. 이미 올라온 문자는 빠져요."); smsScheduleSync(800); } return; }
+  if (d.holSave) { const txt = ($("holTa").value||"").trim(); if (!txt) { toast("문구가 비어 있어요."); return; } if (await holSave({[d.holSave]:{text:txt}})) { holEditId = null; toast("문구를 저장했어요. 목록에 올라온 문자도 바뀌어요."); smsScheduleSync(800); } return; }
+  if (d.holReset) { if (await holSave({[d.holReset]:{text:null}})) { holEditId = null; toast("기본 문구로 돌렸어요."); smsScheduleSync(800); } return; }
+});
+
 // --- boot
 render();
 (async()=>{
@@ -3250,6 +3351,7 @@ render();
   extraCol = db.collection("extraIncome");
   extraCol.onSnapshot(snap=>{ extras = snap.docs.map(d=>Object.assign({id:d.id},d.data())); renderExtra(); renderProfit(); }, ()=>{});
   settingsCol.doc("inbox").onSnapshot(snap=>{ const d=snap.exists?snap.data():null; ibAutoOn = !(d && d.auto===false); if(pKind==="inbox") ibRender(); }, ()=>{});
+  settingsCol.doc("smsHoliday").onSnapshot(snap=>{ smsHol = snap.exists ? (snap.data()||{}) : {}; holLoaded=true; renderHol(); smsScheduleSync(); }, ()=>{ holLoaded=true; renderHol(); });
   settingsCol.doc("finance").onSnapshot(snap=>{ finDoc = snap.exists ? snap.data() : null; renderFin(); }, ()=>{});
   ratesCol.onSnapshot(snap=>{ rateDocs={}; snap.docs.forEach(d=>{ rateDocs[d.id]=d.data(); }); renderCalc(); }, ()=>{});
   col.onSnapshot(snap=>{ const docs=snap.docs.map(d=>Object.assign({id:d.id},d.data())); all=docs.filter(r=>!r.canceled); canceledCust=docs.filter(r=>r.canceled); loaded=true; render(); pDoneSync(); if(typeof smsScheduleSync==="function") smsScheduleSync(); },
