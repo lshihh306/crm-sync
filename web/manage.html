@@ -3052,6 +3052,14 @@ document.addEventListener("click",async e=>{
 const SMS_HOUR=14, SMS_MY="01077240439";
 let holLoaded=false, smsAsk=null, smsRows=[], smsSet=null, smsState="wait", smsErr="", smsBusy=false, smsSyncing=false, smsStarted=false, smsSyncT=null, smsFilter="up", smsEditId=null, smsOpen={};
 const smsDigits=p=>{ const d=ibDigits(p); return /^01\d{8,9}$/.test(d)?d:""; };
+// 받는 사람 목록: 번호 칸에 번호가 여러 개면 각각 따로 보냄.
+// 이름은 "박흥준(강혜령)"처럼 괄호 안 이름을 두 번째 번호와 짝지음 (이름이 모자라면 "고객님")
+function smsRecipients(r){
+  const phones=[...new Set((String(r.phone||"").match(/01[016789][\s.\-]?\d{3,4}[\s.\-]?\d{4}/g)||[]).map(ibDigits))].filter(p=>/^01\d{8,9}$/.test(p));
+  const nm=String(r.name||"");
+  const names=[nm.replace(/\(.*?\)/g,"").trim(), ...[...nm.matchAll(/\(([^)]*)\)/g)].flatMap(m=>m[1].split(/[,/·]/)).map(x=>x.trim()).filter(Boolean)];
+  return phones.map((phone,i)=>({phone, name:names[i]||"", sfx:i?"#"+(i+1):"", r:Object.assign({},r,{name:names[i]||""})}));
+}
 const smsAddDays=(s,n)=>{ const [y,m,d]=s.split("-").map(Number); return dstr(new Date(y,m-1,d+n)); };
 const smsPhoneFmt=d=>d.length===11?`${d.slice(0,3)}-${d.slice(3,7)}-${d.slice(7)}`:d.length===10?`${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`:d;
 // 보낼 날짜 → 그날 오후 2시. 이미 지난 날짜(늦게 입력·놓친 것)면 오늘 오후 2시(이미 2시가 지났으면 바로)
@@ -3072,11 +3080,11 @@ function smsWanted(){
   const out=[], t=todayStr(), lo=smsAddDays(t,-7), hi=smsAddDays(t,3);
   all.forEach(r=>{
     if(r.isExample||r.smsOff) return;
-    const ph=smsDigits(r.phone); if(!ph) return;
+    const rc=smsRecipients(r); if(!rc.length) return;
     const ci=careInfo(r);
     if(ci) ci.steps.forEach(st=>{
       if(st.done||st.date<lo||st.date>hi) return;
-      out.push({key:`c:${r.id}:m${st.m}`, cid:r.id, name:r.name||"", phone:ph, kind:st.m===0?"thanks":"care", label:careTitle(st.m), date:st.date, body:careMsg(r,st.m)});
+      rc.forEach(p=>out.push({key:`c:${r.id}:m${st.m}${p.sfx}`, cid:r.id, name:p.name, phone:p.phone, kind:st.m===0?"thanks":"care", label:careTitle(st.m), date:st.date, body:careMsg(p.r,st.m)}));
     });
     const ex=nextExpiry(r.insuranceStart);
     if(ex && ex.days>=3){
@@ -3085,13 +3093,13 @@ function smsWanted(){
         const d=smsAddDays(ex.str,-n);
         if(c[k]||d<lo||d>hi) return;
         if(k==="d60" && (ex.days<=30 || c.d30)) return;
-        out.push({key:`c:${r.id}:ins${n}:${ex.str}`, cid:r.id, name:r.name||"", phone:ph, kind:"ins", label:`보험 만기 ${n}일 전`, date:d, body:insMsg(r,{str:ex.str, days:n})});
+        rc.forEach(p=>out.push({key:`c:${r.id}:ins${n}:${ex.str}${p.sfx}`, cid:r.id, name:p.name, phone:p.phone, kind:"ins", label:`보험 만기 ${n}일 전`, date:d, body:insMsg(p.r,{str:ex.str, days:n})}));
       });
     }
   });
   return out.concat(holWanted());
 }
-const smsKeyCust=k=>{ const m=String(k||"").match(/^c:(.+?):(m\d+|ins\d+:.+|hol:.+)$/); return m?m[1]:null; };
+const smsKeyCust=k=>{ const m=String(k||"").match(/^c:(.+?):(m\d+|ins\d+:[^#]+|hol:[^#]+)(#\d+)?$/); return m?m[1]:null; };
 function smsScheduleSync(ms){ clearTimeout(smsSyncT); smsSyncT=setTimeout(smsSync, ms??3000); }
 async function smsSync(){
   if(!gmcp||!loaded||!holLoaded||smsSyncing) return;
@@ -3110,7 +3118,7 @@ async function smsSync(){
       const w=wantMap.get(q.key);
       if(!w){
         const r=all.find(x=>x.id===smsKeyCust(q.key));
-        const why=!r?"고객이 삭제됨":r.smsOff?"이 고객 자동 문자 꺼짐":!smsDigits(r.phone)?"전화번호 없음":/:hol:/.test(q.key)?"명절 인사 꺼짐·날짜 지남":"연락 완료로 체크됨·날짜 변경";
+        const why=!r?"고객이 삭제됨":r.smsOff?"이 고객 자동 문자 꺼짐":!smsRecipients(r).length?"전화번호 없음":/:hol:/.test(q.key)?"명절 인사 꺼짐·날짜 지남":"연락 완료로 체크됨·날짜 변경";
         await sbSql(`update public.sms_queue set status='canceled', note=${sqlq(why)}, updated_at=now() where id=${sqlq(q.id)} and status='scheduled'`);
         continue;
       }
@@ -3127,8 +3135,8 @@ async function smsSync(){
       let m;
       if(r && col){
         try{
-          if((m=s.key.match(/:m(\d+)$/))) { if(!(r.careCheck||{})["m"+m[1]]) await col.doc(r.id).update({careCheck:{["m"+m[1]]:d}}); }
-          else if((m=s.key.match(/:ins(60|30):(\d{4}-\d{2}-\d{2})$/))) { const k="d"+m[1]; if(!((r.insContact||{})[m[2]]||{})[k]) await col.doc(r.id).update({insContact:{[m[2]]:{[k]:d}}}); }
+          if((m=s.key.match(/:m(\d+)(#\d+)?$/))) { if(!(r.careCheck||{})["m"+m[1]]) await col.doc(r.id).update({careCheck:{["m"+m[1]]:d}}); }
+          else if((m=s.key.match(/:ins(60|30):(\d{4}-\d{2}-\d{2})(#\d+)?$/))) { const k="d"+m[1]; if(!((r.insContact||{})[m[2]]||{})[k]) await col.doc(r.id).update({insContact:{[m[2]]:{[k]:d}}}); }
         }catch(_){ continue; }
       }
       await sbSql(`update public.sms_queue set applied=true where id=${sqlq(s.id)}`);
@@ -3282,7 +3290,7 @@ function holBody(d, r, n){
 }
 function holTargets(n){
   // 출고 고객 중 번호 있고, 자동 문자 안 끈 고객 (발송 3일 안쪽에 출고한 고객은 감사 문자와 겹쳐서 제외)
-  return all.filter(r => !r.isExample && !r.smsOff && smsDigits(r.phone) && !(r.deliveredAt && r.deliveredAt > smsAddDays(n.send,-3)))
+  return all.filter(r => !r.isExample && !r.smsOff && smsRecipients(r).length && !(r.deliveredAt && r.deliveredAt > smsAddDays(n.send,-3)))
     .sort((a,b)=>String(a.id).localeCompare(String(b.id)));
 }
 // smsWanted()에 더해짐: 발송 7일 전부터 목록에 올라옴
@@ -3292,10 +3300,11 @@ function holWanted(){
     if (!holOn(d.id)) return;
     const n = holNext(d); if (!n || n.send > hi) return;
     const list = holTargets(n);
-    list.forEach((r,i) => {
-      const day = smsAddDays(n.send, -Math.floor(i / HOL_PER_DAY)); // 많으면 하루씩 앞당겨 나눔
-      out.push({key:`c:${r.id}:hol:${d.id}${n.year}`, cid:r.id, name:r.name||"", phone:smsDigits(r.phone), kind:"hol", label:`${d.name} 인사`, date:day, body:holBody(d,r,n)});
-    });
+    let i = 0;
+    list.forEach(r => smsRecipients(r).forEach(p => {
+      const day = smsAddDays(n.send, -Math.floor(i++ / HOL_PER_DAY)); // 많으면 하루씩 앞당겨 나눔
+      out.push({key:`c:${r.id}:hol:${d.id}${n.year}${p.sfx}`, cid:r.id, name:p.name, phone:p.phone, kind:"hol", label:`${d.name} 인사`, date:day, body:holBody(d,p.r,n)});
+    }));
   });
   return out;
 }
