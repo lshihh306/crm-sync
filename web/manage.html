@@ -1171,8 +1171,14 @@ function careInfo(r){
   return {steps, due, next};
 }
 // --- 카톡 문자 공통
+// 문자에 넣을 호칭: "고객님"이 두 번 들어가지 않게 정리
+//  "박준하" → "박준하 고객님", "박준하 고객님"·"박준하고객님" → "박준하 고객님", "박준하 고객" → "박준하 고객님",
+//  "김민수 대표님"처럼 이미 다른 호칭이 있으면 그대로
 function msgName(r){
-  let n=(r.name||"").replace(/\(.*?\)/g,"").trim();
+  let n=String(r.name||"").replace(/\(.*?\)/g,"").replace(/\s+/g," ").trim();
+  n=n.replace(/(\s*고객님)+$/,"").replace(/\s*고객$/,"").trim();
+  // 폰 저장명 형식("@출고 GV80 김송철", "☆출고 520i 홍길동")이면 맨 끝 성함만
+  if(/^[☆★@₩]/.test(n)) n=n.split(" ").pop().replace(/^[☆★@₩]/,"");
   if(!n) return "고객님";
   return /님$/.test(n) ? n : n+" 고객님";
 }
