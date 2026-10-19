@@ -563,7 +563,8 @@ label.full{grid-column:1/-1}
       <div class="hol-top"><button class="fold" type="button" data-fold="cb" aria-expanded="false" aria-controls="cbBody"><span class="chev" aria-hidden="true">▸</span><b>📨 콜백 문자</b><span class="meta" id="cbSum"></span></button>
         <div class="tools"><button class="check" type="button" id="cbMaster" aria-pressed="false">꺼짐</button></div></div>
       <div id="cbBody" class="fold-body" hidden>
-        <span class="meta">통화가 끝나거나 부재중·거절일 때 그 번호로 바로 보내요. <b>같은 번호에는 평생 한 번만</b> 나가요. 본폰 앱 1.5 이상에서 통화기록 권한을 허용해야 동작해요.</span>
+        <span class="meta"><b>부재중·거절</b>은 모든 번호에 바로 보내요. <b>통화 끝난 뒤</b>는 통화 녹음을 분석해서 <b>고객과의 차량 상담일 때만</b> 보내요(분석에 몇 분 걸려요). 같은 번호에는 종류별로 한 번만 나가요. 본폰 앱에서 통화기록 권한을 허용해야 동작해요.</span>
+        <div id="cbWaits"></div>
         <div id="cbList"></div>
       </div>
     </section>
@@ -3175,6 +3176,7 @@ async function smsLoad(quiet){
     const [set]=await sbSql("select enabled, send_hour, app_seen_at, app_info, callback from public.sms_settings where id=1");
     smsSet=set||{enabled:false};
     smsRows=await sbSql("select id,key,customer_id,name,phone,kind,label,body,send_at,status,edited,sent_at,error,note,updated_at,media_id from public.sms_queue where status in ('scheduled','sending','failed') or updated_at > now() - interval '30 days' order by send_at asc limit 500");
+    try{ cbWaits=await sbSql("select phone,name,call_at,status,note from public.callback_wait where call_at > now() - interval '3 days' order by call_at desc limit 15"); }catch(_){ cbWaits=[]; }
     smsState="ok"; smsErr="";
   }catch(err){ smsState="err"; smsErr=err&&err.code?ibErrText(err):"자동 문자 목록을 불러오지 못했어요"; }
   finally{ smsBusy=false; renderSms(); renderAlertBar(); }
@@ -3242,7 +3244,7 @@ function renderSms(){
   if(smsFilter==="off"){ list=canceled; empty="보내지 않기로 한 문자가 없어요."; }
   $("smsList").innerHTML = smsState!=="ok" ? "" : list.length ? list.map(smsCard).join("") : `<div class="empty">${empty}</div>`;
   const offs=all.filter(r=>r.smsOff);
-  renderHol(); if(typeof renderCb==="function") renderCb();
+  renderHol(); if(typeof renderCb==="function"){ renderCb(); renderCbWaits(); }
   $("smsOffList").innerHTML = offs.length ? `<span class="meta">자동 문자 끈 고객:</span> ${offs.map(r=>`<button class="chip" type="button" data-sms-on="${esc(r.id)}" title="다시 켜기">${esc(r.name||"(이름 없음)")} ✕</button>`).join(" ")}` : "";
 }
 async function smsDo(q, msg){ try{ await sbSql(q); if(msg) toast(msg); }catch(err){ toast(err&&err.code?ibErrText(err):"처리하지 못했어요. 잠시 후 다시 시도해 주세요."); } await smsLoad(true); }
@@ -3367,8 +3369,13 @@ $("holList").addEventListener("click", async e => {
 
 
 // --- 콜백 문자 설정 (sms_settings.callback, 서버가 이 문구로 보냄)
-const CB_DEF=[{id:"after",name:"통화 끝난 뒤",icon:"📞"},{id:"missed",name:"부재중 전화",icon:"📵"},{id:"rejected",name:"거절한 전화",icon:"🚫"}];
-let cbEditId=null, cbImgCache={};
+const CB_DEF=[{id:"after",name:"통화 끝난 뒤 · 고객만",icon:"📞"},{id:"missed",name:"부재중 전화 · 모든 번호",icon:"📵"},{id:"rejected",name:"거절한 전화 · 모든 번호",icon:"🚫"}];
+let cbEditId=null, cbImgCache={}, cbWaits=[];
+const CBW_ST={waiting:["분석 중","need"],queued:["고객 → 보냄","done"],skipped:["안 보냄","off"],expired:["녹음 없음","off"]};
+function renderCbWaits(){
+  const box=$("cbWaits"); if(!box) return;
+  box.innerHTML = !cbWaits.length ? "" : `<div class="meta" style="margin-bottom:4px">최근 3일 통화 후 콜백 판단</div>` + cbWaits.map(w=>{ const [t,c]=CBW_ST[w.status]||[w.status,""]; return `<div class="meta" style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><span class="mono">${smsWhen(w.call_at)}</span><b style="color:var(--fg)">${esc(w.name||smsPhoneFmt(w.phone))}</b><span class="status ${c==="done"?"done":c==="off"?"off":"need"}">${t}</span>${w.note&&w.status!=="queued"?`<span>${esc(w.note)}</span>`:""}</div>`; }).join("");
+}
 async function cbLoadImg(id){
   if(!id||cbImgCache[id]) return;
   try{ const [r]=await sbSql(`select data from public.sms_media where id=${sqlq(id)}`); if(r&&r.data){ cbImgCache[id]=r.data; renderCb(); } }catch(_){}
