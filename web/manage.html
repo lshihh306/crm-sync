@@ -484,6 +484,14 @@ label.full{grid-column:1/-1}
 .hol-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center}
 .hol-top .tools{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 @media (max-width:560px){.hol-top{grid-template-columns:minmax(0,1fr)}.hol-top .tools{justify-content:flex-start}}
+.fold{font:inherit;color:var(--fg);background:none;border:none;padding:2px 0;cursor:pointer;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;text-align:left;min-width:0}
+.fold b{font-size:15px}
+.fold .chev{display:inline-block;width:12px;color:var(--muted);transition:transform .15s}
+.fold[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.fold:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.fold-body{display:flex;flex-direction:column;gap:10px}
+.fold-body[hidden]{display:none}
+@media (prefers-reduced-motion:reduce){.fold .chev{transition:none}}
 #smsOffList .chip{font:inherit;font-size:12px;border:none;cursor:pointer}
 </style>
 
@@ -546,9 +554,20 @@ label.full{grid-column:1/-1}
       <div style="display:flex;flex-direction:column;gap:4px;min-width:0"><div class="meta" id="smsPhone">불러오는 중…</div><div class="confirm" id="smsAskOn" hidden>켜면 보낼 시각이 지난 문자 <b id="smsAskN">0</b>건이 바로 나가요. 오른쪽 버튼을 한 번 더 누르면 켜져요. <button class="btn ghost" type="button" id="smsAskCancel">취소</button></div><div class="meta" id="smsOffNote" hidden>지금은 <b>꺼져 있어서</b> 목록만 만들어지고 실제로 나가진 않아요. 목록을 확인하고 켜 주세요.</div></div>
       <div class="actions"><button class="btn" id="smsTest" type="button">내 폰으로 테스트</button><button class="btn" id="smsRefresh" type="button">새로고침</button><button class="btn" id="smsSwitch" type="button" aria-pressed="false" disabled>자동 발송 꺼짐</button></div>
     </div>
+    <section class="holbox" id="cbBox">
+      <div class="hol-top"><button class="fold" type="button" data-fold="cb" aria-expanded="false" aria-controls="cbBody"><span class="chev" aria-hidden="true">▸</span><b>📨 콜백 문자</b><span class="meta" id="cbSum"></span></button>
+        <div class="tools"><button class="check" type="button" id="cbMaster" aria-pressed="false">꺼짐</button></div></div>
+      <div id="cbBody" class="fold-body" hidden>
+        <span class="meta">통화가 끝나거나 부재중·거절일 때 그 번호로 바로 보내요. <b>같은 번호에는 평생 한 번만</b> 나가요. 본폰 앱 1.5 이상에서 통화기록 권한을 허용해야 동작해요.</span>
+        <div id="cbList"></div>
+      </div>
+    </section>
     <section class="holbox">
-      <div class="ex-head"><b style="font-size:15px">명절·기념일 인사</b><span class="meta">출고 고객 전체에게 이름과 차종을 넣어 한 명씩 보내요. 발송 7일 전부터 아래 목록에 올라오니, 빼고 싶은 분은 그때 "보내지 않기"를 누르면 돼요.</span></div>
-      <div id="holList"></div>
+      <div class="hol-top"><button class="fold" type="button" data-fold="hol" aria-expanded="false" aria-controls="holBody"><span class="chev" aria-hidden="true">▸</span><b>💌 명절·기념일 인사</b><span class="meta" id="holSum"></span></button></div>
+      <div id="holBody" class="fold-body" hidden>
+        <span class="meta">출고 고객 전체에게 이름과 차종을 넣어 한 명씩 보내요. 발송 7일 전부터 아래 목록에 올라오니, 빼고 싶은 분은 그때 "보내지 않기"를 누르면 돼요.</span>
+        <div id="holList"></div>
+      </div>
     </section>
     <div class="stats four" id="smsFilters">
       <button class="stat warn" type="button" data-sf="up"><div class="k">오늘 보낼 문자</div><div class="v" id="sToday">–</div></button>
@@ -3148,7 +3167,7 @@ async function smsSync(){
 async function smsLoad(quiet){
   if(!gmcp||smsBusy) return; smsBusy=true;
   try{
-    const [set]=await sbSql("select enabled, send_hour, app_seen_at, app_info from public.sms_settings where id=1");
+    const [set]=await sbSql("select enabled, send_hour, app_seen_at, app_info, callback from public.sms_settings where id=1");
     smsSet=set||{enabled:false};
     smsRows=await sbSql("select id,key,customer_id,name,phone,kind,label,body,send_at,status,edited,sent_at,error,note,updated_at from public.sms_queue where status in ('scheduled','sending','failed') or updated_at > now() - interval '30 days' order by send_at asc limit 500");
     smsState="ok"; smsErr="";
@@ -3169,7 +3188,7 @@ function smsAppOff(){
   return Date.now()-ibTime(smsSet.app_seen_at) > 3*3600000;
 }
 const SMS_ST={scheduled:["예정","need"],sending:["보내는 중","need"],sent:["보냄","done"],failed:["실패","fail"],canceled:["보내지 않음","off"]};
-const SMS_KIND={thanks:"🎉",care:"💬",ins:"📅",test:"🧪",manual:"✉️",hol:"💌"};
+const SMS_KIND={thanks:"🎉",care:"💬",ins:"📅",test:"🧪",manual:"✉️",hol:"💌",callback:"📨"};
 function smsCard(q){
   const [stTxt,stCls]=SMS_ST[q.status]||[q.status,""];
   const when = q.status==="sent" ? "보낸 시각 "+smsWhen(q.sent_at) : q.status==="scheduled" ? "보낼 시각 "+smsWhen(q.send_at) : "예정 "+smsWhen(q.send_at);
@@ -3182,7 +3201,7 @@ function smsCard(q){
     ? `<span class="confirm">이 고객에게는 앞으로 자동 문자를 안 보낼까요?</span><button class="btn danger" type="button" data-sms-off="${esc(cid)}">끄기</button><button class="btn ghost" type="button" data-sms-askx="1">취소</button>`
     : `<button class="btn ghost" type="button" data-sms-ask="off:${q.id}">이 고객 자동 문자 끄기</button>`);
   return `<article class="smscard st-${stCls}">
-    <div class="sm-top"><div style="min-width:0"><b>${SMS_KIND[q.kind]||"✉️"} ${esc(q.name||"(이름 없음)")}</b><span class="status ${stCls==="done"?"done":"need"} ${stCls}">${stTxt}</span>${q.edited&&q.kind!=="test"?'<span class="badge ex">직접 수정</span>':""}
+    <div class="sm-top"><div style="min-width:0"><b>${SMS_KIND[q.kind]||"✉️"} ${esc(q.name||(q.kind==="callback"?smsPhoneFmt(q.phone||""):"(이름 없음)"))}</b><span class="status ${stCls==="done"?"done":"need"} ${stCls}">${stTxt}</span>${q.edited&&q.kind!=="test"?'<span class="badge ex">직접 수정</span>':""}
       <div class="meta">${esc(q.label||"")} · <span class="mono">${esc(smsPhoneFmt(q.phone||""))}</span></div></div>
       <div class="sm-when">${when}</div></div>
     ${q.error?`<div class="sm-err">⚠ ${esc(q.error)}</div>`:""}${q.status==="canceled"&&q.note?`<div class="meta">사유: ${esc(q.note)}</div>`:""}
@@ -3218,7 +3237,7 @@ function renderSms(){
   if(smsFilter==="off"){ list=canceled; empty="보내지 않기로 한 문자가 없어요."; }
   $("smsList").innerHTML = smsState!=="ok" ? "" : list.length ? list.map(smsCard).join("") : `<div class="empty">${empty}</div>`;
   const offs=all.filter(r=>r.smsOff);
-  renderHol();
+  renderHol(); if(typeof renderCb==="function") renderCb();
   $("smsOffList").innerHTML = offs.length ? `<span class="meta">자동 문자 끈 고객:</span> ${offs.map(r=>`<button class="chip" type="button" data-sms-on="${esc(r.id)}" title="다시 켜기">${esc(r.name||"(이름 없음)")} ✕</button>`).join(" ")}` : "";
 }
 async function smsDo(q, msg){ try{ await sbSql(q); if(msg) toast(msg); }catch(err){ toast(err&&err.code?ibErrText(err):"처리하지 못했어요. 잠시 후 다시 시도해 주세요."); } await smsLoad(true); }
@@ -3311,6 +3330,8 @@ function holWanted(){
 const pwdOf = s => { const [y,m,dd]=s.split("-").map(Number); return PWD[new Date(y,m-1,dd).getDay()]; };
 function renderHol(){
   const box = $("holList"); if (!box) return;
+  const nx = HOL_DEF.filter(d => holOn(d.id)).map(d => ({d, n:holNext(d)})).filter(o => o.n).sort((a,b) => a.n.send.localeCompare(b.n.send))[0];
+  $("holSum").textContent = nx ? `다음: ${nx.d.name} ${fmt(nx.n.send).slice(5)}(${pwdOf(nx.n.send)}) 오후 2시` : "모두 꺼짐";
   box.innerHTML = HOL_DEF.map(d => {
     const n = holNext(d), on = holOn(d.id), cnt = n ? holTargets(n).length : 0, days = n ? Math.ceil(cnt / HOL_PER_DAY) : 0;
     const when = n ? `${fmt(n.send)}(${pwdOf(n.send)}) 오후 2시${days>1?` 포함 ${days}일에 나눠서`:""}` : "다음 날짜 미정";
@@ -3338,6 +3359,48 @@ $("holList").addEventListener("click", async e => {
   if (d.holSave) { const txt = ($("holTa").value||"").trim(); if (!txt) { toast("문구가 비어 있어요."); return; } if (await holSave({[d.holSave]:{text:txt}})) { holEditId = null; toast("문구를 저장했어요. 목록에 올라온 문자도 바뀌어요."); smsScheduleSync(800); } return; }
   if (d.holReset) { if (await holSave({[d.holReset]:{text:null}})) { holEditId = null; toast("기본 문구로 돌렸어요."); smsScheduleSync(800); } return; }
 });
+
+
+// --- 콜백 문자 설정 (sms_settings.callback, 서버가 이 문구로 보냄)
+const CB_DEF=[{id:"after",name:"통화 끝난 뒤",icon:"📞"},{id:"missed",name:"부재중 전화",icon:"📵"},{id:"rejected",name:"거절한 전화",icon:"🚫"}];
+let cbEditId=null;
+const cbConf=()=> (smsSet && smsSet.callback && typeof smsSet.callback==="object") ? smsSet.callback : {};
+function renderCb(){
+  const box=$("cbList"); if(!box) return;
+  const cf=cbConf(), master=cf.on!==false, ok=smsState==="ok";
+  const m=$("cbMaster"); m.setAttribute("aria-pressed",master); m.textContent=master?"켜짐":"꺼짐"; m.disabled=!ok;
+  const sentN=smsRows.filter(q=>q.kind==="callback"&&q.status==="sent").length;
+  box.innerHTML = !ok ? "" : CB_DEF.map(d=>{
+    const c=cf[d.id]||{}, on=c.on!==false, editing=cbEditId===d.id;
+    return `<div class="hol-row${on&&master?"":" off"}">
+      <div class="hol-top"><div style="min-width:0"><b>${d.icon} ${d.name}</b><div class="meta">${esc((c.text||"").split("\n").slice(1,2).join(" ")||"문구 없음")}</div></div>
+        <div class="tools"><button class="check" type="button" data-cb-edit="${d.id}">${editing?"닫기":"문구 보기"}</button><button class="check" type="button" data-cb-on="${d.id}" aria-pressed="${on}">${on?"켜짐":"꺼짐"}</button></div></div>
+      ${editing?`<textarea class="sm-ta" id="cbTa" rows="11">${esc(c.text||"")}</textarea><div class="tools"><button class="btn primary" type="button" data-cb-save="${d.id}">문구 저장</button></div>`:""}
+    </div>`;
+  }).join("") + `<div class="meta">최근 30일 콜백 문자 <b>${sentN}</b>건 보냄 · 아래 "보낸 문자"에서 확인</div>`;
+  const onN=CB_DEF.filter(d=>(cf[d.id]||{}).on!==false).length;
+  $("cbSum").textContent = !ok ? "" : !master ? "꺼짐" : `${onN}종 켜짐 · 30일간 ${sentN}건 보냄`;
+}
+async function cbSave(next){
+  await smsDo(`update public.sms_settings set callback=${sqlq(JSON.stringify(next))}::jsonb, updated_at=now() where id=1`);
+}
+$("cbMaster").onclick=async()=>{ const cf=Object.assign({},cbConf()); cf.on=cf.on===false; await cbSave(cf); toast(cf.on?"콜백 문자를 켰어요.":"콜백 문자를 껐어요."); };
+$("cbList").addEventListener("click",async e=>{
+  const b=e.target.closest("button"); if(!b) return; const d=b.dataset, cf=JSON.parse(JSON.stringify(cbConf()));
+  if(d.cbEdit){ cbEditId=cbEditId===d.cbEdit?null:d.cbEdit; renderCb(); return; }
+  if(d.cbOn){ cf[d.cbOn]=Object.assign({},cf[d.cbOn]||{}); cf[d.cbOn].on=cf[d.cbOn].on===false; await cbSave(cf); toast(cf[d.cbOn].on?"켰어요.":"껐어요."); return; }
+  if(d.cbSave){ const txt=($("cbTa").value||"").trim(); if(!txt){ toast("문구가 비어 있어요."); return; } cf[d.cbSave]=Object.assign({},cf[d.cbSave]||{},{text:txt}); cbEditId=null; await cbSave(cf); toast("문구를 저장했어요. 다음 콜백부터 이 문구로 나가요."); return; }
+});
+
+
+// --- 콜백·명절 박스 접기/펼치기 (이 브라우저에 펼침 상태 기억)
+const foldOpen={cb:false,hol:false};
+try{ Object.assign(foldOpen, JSON.parse(localStorage.getItem("smsFold")||"{}")); }catch(_){}
+function applyFold(){
+  [["cb","cbBody"],["hol","holBody"]].forEach(([k,id])=>{ const b=document.querySelector(`[data-fold="${k}"]`); if(!b) return; b.setAttribute("aria-expanded",!!foldOpen[k]); $(id).hidden=!foldOpen[k]; });
+}
+document.querySelectorAll("[data-fold]").forEach(b=>b.onclick=()=>{ const k=b.dataset.fold; foldOpen[k]=!foldOpen[k]; try{ localStorage.setItem("smsFold",JSON.stringify(foldOpen)); }catch(_){} applyFold(); });
+applyFold();
 
 // --- boot
 render();
