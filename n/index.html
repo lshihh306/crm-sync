@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>광고 문자 수신거부</title>
+<style>
+:root{--bg:#f3f5f6;--card:#fff;--fg:#16222a;--muted:#5b6b74;--line:#d5dcdf;--accent:#0d5c7a;--ok:#1f7a4d;--danger:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#0f161a;--card:#172127;--fg:#e4ecef;--muted:#93a4ad;--line:#2c3a42;--accent:#5fb3d3;--ok:#6fd3a0;--danger:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+main{max-width:440px;margin:0 auto;padding:40px 16px 48px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px 20px;display:flex;flex-direction:column;gap:16px}
+h1{font-size:21px;margin:0}
+p{margin:0}
+.muted{color:var(--muted);font-size:14px}
+.num{font-size:22px;font-weight:700;letter-spacing:.02em}
+button{font:inherit;font-size:18px;font-weight:700;border:none;border-radius:12px;padding:15px;background:var(--danger);color:#fff;cursor:pointer;width:100%}
+button:disabled{opacity:.55}
+input{font:inherit;font-size:20px;width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg)}
+.done{color:var(--ok);font-weight:700;font-size:19px}
+.err{color:var(--danger);font-size:14px}
+footer{margin-top:18px;text-align:center}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <div class="card" id="ask">
+    <h1>광고 문자 수신거부</h1>
+    <p>현대자동차 신대치대리점 이성훈 차장이 보내는 <b>혜택·광고 문자</b>를 더 이상 받지 않으시려면 아래 버튼을 눌러 주세요.</p>
+    <div id="byCode" hidden>
+      <p class="muted">받으시는 번호</p>
+      <p class="num" id="masked"></p>
+    </div>
+    <div id="byInput" hidden>
+      <label class="muted" for="ph">문자를 받으신 휴대폰 번호</label>
+      <input id="ph" type="tel" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000">
+    </div>
+    <button id="go" type="button">수신거부하기</button>
+    <p class="err" id="err" hidden></p>
+    <p class="muted">수신거부는 무료이며, 처리되면 다음 발송부터 광고 문자가 가지 않습니다.</p>
+  </div>
+  <div class="card" id="ok" hidden>
+    <p class="done">✅ 수신거부가 완료되었습니다</p>
+    <p><span id="okNum"></span> 번호로는 앞으로 광고 문자를 보내지 않겠습니다.</p>
+    <p class="muted">그동안 불편을 드렸다면 죄송합니다.</p>
+  </div>
+  <footer class="muted">문의 010-7724-0439</footer>
+</main>
+<script>
+var API="https://fyyfeqwthbgetwkayodu.supabase.co/functions/v1/optout";
+var K=0x5a3c9e17;
+function decode(c){
+  c=String(c||"").toLowerCase().trim();
+  if(!/^[0-9a-z]{4,10}$/.test(c)) return null;
+  var x=parseInt(c.slice(0,-2),36), chk=parseInt(c.slice(-2),36);
+  if(!isFinite(x)||!isFinite(chk)) return null;
+  var v=(x^K)>>>0;
+  if(((v%1296)*7+13)%1296!==chk) return null;
+  var p="0"+v;
+  return /^01[016789]\d{7,8}$/.test(p)?p:null;
+}
+function mask(p){ return p.slice(0,3)+"-****-"+p.slice(-4); }
+var code=new URLSearchParams(location.search).get("c");
+var phone=decode(code);
+var $=function(id){return document.getElementById(id);};
+if(phone){ $("byCode").hidden=false; $("masked").textContent=mask(phone); }
+else { $("byInput").hidden=false; code=null; }
+$("go").onclick=function(){
+  var body;
+  if(code) body={c:code};
+  else{
+    var d=$("ph").value.replace(/\D/g,"");
+    if(!/^01[016789]\d{7,8}$/.test(d)){ $("err").textContent="휴대폰 번호를 정확히 입력해 주세요."; $("err").hidden=false; return; }
+    body={phone:d}; phone=d;
+  }
+  $("go").disabled=true; $("go").textContent="처리 중…"; $("err").hidden=true;
+  fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
+    .then(function(r){return r.json().then(function(j){return {ok:r.ok&&j.ok,j:j};});})
+    .then(function(res){
+      if(res.ok){ $("ask").hidden=true; $("ok").hidden=false; $("okNum").textContent=res.j.masked||mask(phone); }
+      else throw new Error(res.j&&res.j.error||"오류");
+    })
+    .catch(function(e){ $("go").disabled=false; $("go").textContent="수신거부하기"; $("err").textContent=(e&&e.message&&e.message!=="Failed to fetch")?e.message:"연결이 원활하지 않아요. 잠시 후 다시 눌러 주세요."; $("err").hidden=false; });
+};
+</script>
+</body>
+</html>
