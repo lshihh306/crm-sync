@@ -39,7 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var monthView: MonthView
     private lateinit var title: TextView
     private lateinit var status: TextView
-    private var dayDlg: AlertDialog? = null
+    private var dayDlg: android.app.Dialog? = null
     private val io = Executors.newSingleThreadExecutor()
     private var month: YearMonth = YearMonth.now()
     private var sel: LocalDate = LocalDate.now()
@@ -91,6 +91,7 @@ class MainActivity : AppCompatActivity() {
 
         monthView = MonthView(this, pal).apply {
             onPick = { d -> sel = d; if (YearMonth.from(d) != month) month = YearMonth.from(d); render(); showDay(d) }
+            onItem = { item -> sel = LocalDate.parse(item.date); render(); itemMenu(item) }
             onSwipe = { n -> month = month.plusMonths(n.toLong()); render() }
         }
         // 달력은 화면 가득 + 오른쪽 아래 [+] 버튼 (관리 시스템 캘린더처럼)
@@ -128,29 +129,74 @@ class MainActivity : AppCompatActivity() {
         MonthWidget.updateAll(this)
     }
 
-    /** 날짜 누르면 그날 일정 창 (관리 시스템처럼) */
+    /** 아래에서 올라오는 창 (관리 시스템 웹페이지의 팝업처럼) */
+    private fun sheet(title: String, sub: String?, content: View, buttons: List<Pair<String, () -> Unit>> = emptyList(), accent: Int? = null): android.app.Dialog {
+        val dlg = android.app.Dialog(this)
+        dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply { setColor(pal.bg); cornerRadii = floatArrayOf(dp(18).toFloat(), dp(18).toFloat(), dp(18).toFloat(), dp(18).toFloat(), 0f, 0f, 0f, 0f) }
+            setPadding(dp(20), dp(10), dp(20), dp(20))
+        }
+        box.addView(View(this).apply { background = round(pal.line, dp(3).toFloat()) }, LinearLayout.LayoutParams(dp(40), dp(5)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(10) })
+        val hd = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        if (accent != null) hd.addView(View(this).apply { background = round(accent, dp(4).toFloat()) }, LinearLayout.LayoutParams(dp(8), dp(28)).apply { rightMargin = dp(10) })
+        val tcol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        tcol.addView(TextView(this).apply { text = title; textSize = 19f; setTypeface(typeface, Typeface.BOLD); setTextColor(pal.fg) })
+        if (!sub.isNullOrBlank()) tcol.addView(TextView(this).apply { text = sub; textSize = 13f; setTextColor(pal.muted) })
+        hd.addView(tcol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        hd.addView(TextView(this).apply { text = "닫기"; textSize = 15f; setTextColor(pal.muted); setPadding(dp(12), dp(8), 0, dp(8)); setOnClickListener { dlg.dismiss() } })
+        box.addView(hd)
+        val sc = ScrollView(this).apply { addView(content) }
+        box.addView(sc, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { topMargin = dp(10) })
+        if (buttons.isNotEmpty()) {
+            val br = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(14), 0, 0) }
+            buttons.forEachIndexed { i, (label, f) ->
+                val primary = i == buttons.lastIndex
+                br.addView(TextView(this).apply {
+                    text = label; textSize = 15f; gravity = Gravity.CENTER; setTypeface(typeface, Typeface.BOLD)
+                    setTextColor(if (primary) pal.accentFg else if (label.contains("삭제")) pal.sun else pal.fg)
+                    background = if (primary) round(pal.accent, dp(12).toFloat()) else GradientDrawable().apply { setColor(pal.selBg); cornerRadius = dp(12).toFloat() }
+                    setOnClickListener { dlg.dismiss(); f() }
+                }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { if (i > 0) leftMargin = dp(8) })
+            }
+            box.addView(br)
+        }
+        dlg.setContentView(box)
+        dlg.window?.apply {
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            setGravity(Gravity.BOTTOM)
+            attributes = attributes.apply { dimAmount = 0.45f }
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        }
+        box.maxHeightCap(resources.displayMetrics.heightPixels * 85 / 100)
+        dlg.show()
+        return dlg
+    }
+    private fun LinearLayout.maxHeightCap(px: Int) {
+        viewTreeObserver.addOnGlobalLayoutListener { if (height > px) { layoutParams = layoutParams?.apply { height = px }; requestLayout() } }
+    }
+
+    /** 날짜 누르면 그날 일정 창 */
     private fun showDay(d: LocalDate) {
         dayDlg?.dismiss()
         val list = byDate[d.toString()].orEmpty()
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(4), dp(20), dp(8)) }
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         list.filter { it.isHoliday }.forEach { h ->
-            box.addView(TextView(this).apply { text = "🎌 ${h.title}"; setTextColor(pal.sun); textSize = 14f; setPadding(0, dp(2), 0, dp(6)) })
+            box.addView(TextView(this).apply { text = "🎌 ${h.title}"; setTextColor(pal.sun); textSize = 14f; setPadding(0, 0, 0, dp(6)) })
         }
         val rest = list.filter { !it.isHoliday }
         if (rest.isEmpty()) box.addView(TextView(this).apply { text = "일정이 없어요."; setTextColor(pal.muted); textSize = 15f; setPadding(0, dp(10), 0, dp(10)) })
         rest.forEach { box.addView(itemRow(it)) }
         val dow = d.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
-        dayDlg = AlertDialog.Builder(this).setTitle("${d.monthValue}월 ${d.dayOfMonth}일 ($dow)")
-            .setView(ScrollView(this).apply { addView(box) })
-            .setPositiveButton("+ 일정 추가") { _, _ -> editEvent(null) }
-            .setNegativeButton("닫기", null)
-            .show()
+        dayDlg = sheet("${d.monthValue}월 ${d.dayOfMonth}일 ($dow)", if (rest.isEmpty()) null else "일정 ${rest.size}개", box, listOf("+ 일정 추가" to { editEvent(null) }))
     }
 
     private fun itemRow(it: Item): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(6), 0, dp(6)); setOnClickListener { _ -> dayDlg?.dismiss(); itemMenu(it) }
+            setPadding(0, dp(8), 0, dp(8)); setOnClickListener { _ -> dayDlg?.dismiss(); itemMenu(it) }
         }
         val strip = View(this).apply { background = round(it.bg, dp(3).toFloat()); alpha = if (it.done) 0.5f else 1f }
         row.addView(strip, LinearLayout.LayoutParams(dp(6), dp(46)).apply { rightMargin = dp(10) })
@@ -194,25 +240,44 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** 일정 누르면 자세히 보기 창 */
     private fun itemMenu(it: Item) {
-        val opts = mutableListOf<Pair<String, () -> Unit>>()
+        val d = LocalDate.parse(it.date)
+        val dow = d.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun line(k: String, v: String, onTap: (() -> Unit)? = null) {
+            if (v.isBlank()) return
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(7), 0, dp(7)) }
+            r.addView(TextView(this).apply { text = k; textSize = 14f; setTextColor(pal.muted) }, LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.WRAP_CONTENT))
+            r.addView(TextView(this).apply {
+                text = v; textSize = 15.5f; setTextColor(if (onTap != null) pal.accent else pal.fg); setTextIsSelectable(onTap == null)
+                if (onTap != null) { setTypeface(typeface, Typeface.BOLD); setOnClickListener { onTap() } }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            box.addView(r)
+        }
+        val kind = when { it.kind == "todo" -> if (it.late) "가망 고객 연락 (지연)" else "가망 고객 연락"; it.kind == "done" -> "연락 기록"
+            else -> when (it.cat) { "meet" -> "출고·미팅"; "call" -> "연락 · 고객"; "duty" -> "당직"; "rent" -> "월세"; else -> "개인 일정" } }
+        line("날짜", "${d.year}. ${d.monthValue}. ${d.dayOfMonth}. ($dow)")
+        line("시간", it.time.ifEmpty { if (it.isEvent) "종일" else "" })
+        line("종류", kind + if (it.repeat == "monthly") " · 매월 반복" else "")
+        line("상태", if (it.done) "✓ 완료" else if (it.isEvent || it.kind == "todo") "진행 전" else "")
+        line("연락처", it.phone) { dial(it.phone) }
+        line("메모", it.memo)
+
+        val btns = mutableListOf<Pair<String, () -> Unit>>()
         when {
             it.isEvent -> {
-                opts += (if (it.done) "완료 취소" else "✓ 완료") to { send(JSONObject().put("action", "done").put("ref", it.ref).put("date", it.date).put("done", !it.done), if (it.done) "완료를 취소했어요" else "완료했어요") }
-                opts += "수정" to { editEvent(it) }
-                opts += "삭제" to { confirmDelete(it) }
+                btns += "삭제" to { confirmDelete(it) }
+                btns += "수정" to { editEvent(it) }
+                btns += (if (it.done) "완료 취소" else "✓ 완료") to { send(JSONObject().put("action", "done").put("ref", it.ref).put("date", it.date).put("done", !it.done), if (it.done) "완료를 취소했어요" else "완료했어요") }
             }
             it.kind == "todo" -> {
-                opts += "✓ 연락 완료" to { prospectDone(it) }
-                opts += "연락일 옮기기" to { pickDate(LocalDate.parse(it.date)) { d -> send(JSONObject().put("action", "pmove").put("ref", it.ref).put("date", d.toString()), "${d.monthValue}/${d.dayOfMonth}로 옮겼어요") } }
+                btns += "날짜 옮기기" to { pickDate(d) { nd -> send(JSONObject().put("action", "pmove").put("ref", it.ref).put("date", nd.toString()), "${nd.monthValue}/${nd.dayOfMonth}로 옮겼어요") } }
+                btns += "✓ 연락 완료" to { prospectDone(it) }
             }
         }
-        if (it.phone.isNotBlank()) opts += "📞 전화 걸기 (${it.phone})" to { dial(it.phone) }
-        if (it.memo.isNotBlank()) opts += "메모 보기" to { AlertDialog.Builder(this).setTitle(it.title).setMessage(it.memo).setPositiveButton("닫기", null).show() }
-        if (opts.isEmpty()) { toast("연락 기록이에요. 관리 시스템에서 자세히 볼 수 있어요."); return }
-        AlertDialog.Builder(this).setTitle(it.label)
-            .setItems(opts.map { o -> o.first }.toTypedArray()) { _, i -> opts[i].second() }
-            .setNegativeButton("닫기", null).show()
+        if (it.phone.isNotBlank() && btns.size < 3) btns.add(0, "📞 전화" to { dial(it.phone) })
+        dayDlg = sheet(it.title, null, box, btns, accent = it.bg)
     }
 
     private fun confirmDelete(it: Item) {
@@ -336,7 +401,7 @@ class MainActivity : AppCompatActivity() {
                 when (w) {
                     0 -> askToken(first = false)
                     1 -> refresh(true)
-                    else -> AlertDialog.Builder(this).setTitle("관리 캘린더 1.1")
+                    else -> AlertDialog.Builder(this).setTitle("관리 캘린더 1.2")
                         .setMessage("관리 시스템 달력을 휴대폰에서 보고 고치는 앱이에요.\n\n· 관리 시스템이 열릴 때마다 달력이 새로 맞춰져요.\n· 앱에서 추가·수정·완료한 내용은 앱과 위젯에 바로 보이고, 관리 시스템을 열면 그쪽에도 들어가요.\n· 홈 화면 위젯: 빈 곳 길게 누르기 → 위젯 → 관리 캘린더")
                         .setPositiveButton("닫기", null).show()
                 }

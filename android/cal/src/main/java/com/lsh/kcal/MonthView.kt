@@ -22,12 +22,14 @@ class MonthView(ctx: Context, pal: Palette) : View(ctx) {
         set(v) { field = v; invalidate() }
 
     var onPick: (LocalDate) -> Unit = {}
+    var onItem: (Item) -> Unit = {}
     var onSwipe: (Int) -> Unit = {}
 
     private val gd = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent) = true
         override fun onSingleTapUp(e: MotionEvent): Boolean {
-            renderer.dateAt(e.x, e.y)?.let { onPick(it) }
+            val it0 = renderer.itemAt(e.x, e.y)
+            if (it0 != null) onItem(it0) else renderer.dateAt(e.x, e.y)?.let { onPick(it) }
             return true
         }
         override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {

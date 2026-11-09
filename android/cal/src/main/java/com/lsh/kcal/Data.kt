@@ -123,7 +123,7 @@ object Api {
     class ApiError(msg: String, val code: Int = 0) : Exception(msg)
 
     fun call(token: String, body: JSONObject): JSONObject {
-        body.put("app", "관리 캘린더 1.1")
+        body.put("app", "관리 캘린더 1.2")
         val req = Request.Builder().url(URL)
             .header("x-cal-token", token)
             .post(body.toString().toRequestBody(JSON_TYPE))

@@ -39,6 +39,7 @@ class MonthRenderer(private val density: Float, private val pal: Palette) {
     private val pLine = Paint().apply { strokeWidth = 1f }
 
     /** 그린 뒤 터치 위치 → 날짜 계산용 */
+    val hits = mutableListOf<Pair<RectF, Item>>()
     var top = 0f; var cellW = 0f; var cellH = 0f; var weeks = 6; var start: LocalDate = LocalDate.now()
 
     fun draw(
@@ -46,6 +47,7 @@ class MonthRenderer(private val density: Float, private val pal: Palette) {
         selected: LocalDate?, showTitle: Boolean, compact: Boolean,
     ) {
         c.drawColor(pal.bg)
+        hits.clear()
         var y = 0f
         if (showTitle) {
             val th = dp(if (compact) 34f else 44f)
@@ -129,6 +131,7 @@ class MonthRenderer(private val density: Float, private val pal: Palette) {
             for (k in 0 until show) {
                 val it = bars[k]
                 val r = RectF(x0 + pad, by, x0 + cellW - pad, by + barH)
+                hits.add(RectF(r) to it)
                 val a = if (it.done || !inMonth) 0.5f else 1f
                 pFill.color = withAlpha(it.bg, a)
                 c.drawRoundRect(r, dp(3f), dp(3f), pFill)
@@ -148,6 +151,9 @@ class MonthRenderer(private val density: Float, private val pal: Palette) {
             c.drawLine(x0, y0 + cellH, x0 + cellW, y0 + cellH, pLine)
         }
     }
+
+    /** 터치한 위치의 일정 막대 (조금 넉넉하게) */
+    fun itemAt(x: Float, y: Float): Item? = hits.firstOrNull { (r, _) -> x >= r.left && x <= r.right && y >= r.top - dp(1.5f) && y <= r.bottom + dp(1.5f) }?.second
 
     /** 터치한 위치의 날짜 */
     fun dateAt(x: Float, y: Float): LocalDate? {
