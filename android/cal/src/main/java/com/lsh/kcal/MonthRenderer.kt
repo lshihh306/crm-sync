@@ -44,7 +44,7 @@ class MonthRenderer(private val density: Float, private val pal: Palette) {
 
     fun draw(
         c: Canvas, w: Float, h: Float, ym: YearMonth, byDate: Map<String, List<Item>>,
-        selected: LocalDate?, showTitle: Boolean, compact: Boolean,
+        selected: LocalDate?, showTitle: Boolean, compact: Boolean, refreshedAt: Long = 0L,
     ) {
         c.drawColor(pal.bg)
         hits.clear()
@@ -55,6 +55,12 @@ class MonthRenderer(private val density: Float, private val pal: Palette) {
             val t = "${ym.year}. ${ym.monthValue}."
             val tw = pText.measureText(t)
             c.drawText(t, (w - tw) / 2, th / 2 + pText.textSize * 0.36f, pText)
+            if (refreshedAt > 0) { // 위젯: 제목 옆에 ⟳ 갱신 시각 (제목 누르면 새로고침)
+                val tm = java.time.Instant.ofEpochMilli(refreshedAt).atZone(java.time.ZoneId.systemDefault())
+                val rs = "⟳ %02d:%02d".format(tm.hour, tm.minute)
+                pText.typeface = Typeface.DEFAULT; pText.textSize = dp(9.5f); pText.color = pal.muted
+                c.drawText(rs, (w + tw) / 2 + dp(8f), th / 2 + pText.textSize * 0.36f, pText)
+            }
             pText.color = pal.muted; pText.textSize = dp(if (compact) 18f else 22f); pText.typeface = Typeface.DEFAULT
             c.drawText("‹", dp(16f), th / 2 + pText.textSize * 0.36f, pText)
             c.drawText("›", w - dp(16f) - pText.measureText("›"), th / 2 + pText.textSize * 0.36f, pText)

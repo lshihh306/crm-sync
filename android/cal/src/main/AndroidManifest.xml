@@ -32,6 +32,7 @@
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.lsh.kcal.WIDGET_PREV" />
                 <action android:name="com.lsh.kcal.WIDGET_NEXT" />
+                <action android:name="com.lsh.kcal.WIDGET_REFRESH" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

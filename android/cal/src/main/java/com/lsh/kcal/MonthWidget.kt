@@ -42,6 +42,7 @@ class MonthWidget : AppWidgetProvider() {
     override fun onReceive(ctx: Context, intent: Intent) {
         super.onReceive(ctx, intent)
         when (intent.action) {
+            ACT_REFRESH -> { updateAll(ctx); Sync.now(ctx) }
             ACT_PREV, ACT_NEXT -> {
                 val st = Store(ctx)
                 st.widgetOffset = st.widgetOffset + if (intent.action == ACT_NEXT) 1 else -1
@@ -53,6 +54,7 @@ class MonthWidget : AppWidgetProvider() {
 
     companion object {
         const val ACT_PREV = "com.lsh.kcal.WIDGET_PREV"
+        const val ACT_REFRESH = "com.lsh.kcal.WIDGET_REFRESH"
         const val ACT_NEXT = "com.lsh.kcal.WIDGET_NEXT"
 
         fun updateAll(ctx: Context) {
@@ -81,7 +83,7 @@ class MonthWidget : AppWidgetProvider() {
             val night = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
             MonthRenderer(scale, if (night) Palette.DARK else Palette.LIGHT)
-                .draw(Canvas(bmp), wPx.toFloat(), hPx.toFloat(), ym, st.byDate(), null, showTitle = true, compact = true)
+                .draw(Canvas(bmp), wPx.toFloat(), hPx.toFloat(), ym, st.byDate(), null, showTitle = true, compact = true, refreshedAt = st.fetchedAt)
 
             val rv = RemoteViews(ctx.packageName, R.layout.month_widget)
             rv.setImageViewBitmap(R.id.w_img, bmp)
@@ -91,6 +93,7 @@ class MonthWidget : AppWidgetProvider() {
             rv.setOnClickPendingIntent(R.id.w_img, open)
             rv.setOnClickPendingIntent(R.id.w_prev, broadcast(ctx, ACT_PREV, 1))
             rv.setOnClickPendingIntent(R.id.w_next, broadcast(ctx, ACT_NEXT, 2))
+            rv.setOnClickPendingIntent(R.id.w_title, broadcast(ctx, ACT_REFRESH, 3))
             mgr.updateAppWidget(id, rv)
         }
 
