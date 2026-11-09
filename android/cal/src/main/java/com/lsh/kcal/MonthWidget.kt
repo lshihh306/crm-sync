@@ -99,7 +99,7 @@ class MonthWidget : AppWidgetProvider() {
     }
 }
 
-/** 30분마다 서버에서 새로 받아서 위젯 다시 그리기 */
+/** 15분마다 서버에서 새로 받아서 위젯 다시 그리기 */
 class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
@@ -117,8 +117,8 @@ class SyncWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, 
 object Sync {
     private val net = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
     fun schedule(ctx: Context) {
-        WorkManager.getInstance(ctx).enqueueUniquePeriodicWork("kcal-sync", ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<SyncWorker>(30, TimeUnit.MINUTES).setConstraints(net).build())
+        WorkManager.getInstance(ctx).enqueueUniquePeriodicWork("kcal-sync", ExistingPeriodicWorkPolicy.UPDATE,
+            PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES).setConstraints(net).build())
     }
     fun now(ctx: Context) {
         WorkManager.getInstance(ctx).enqueueUniqueWork("kcal-now", ExistingWorkPolicy.REPLACE,

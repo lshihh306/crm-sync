@@ -401,7 +401,7 @@ class MainActivity : AppCompatActivity() {
                 when (w) {
                     0 -> askToken(first = false)
                     1 -> refresh(true)
-                    else -> AlertDialog.Builder(this).setTitle("관리 캘린더 1.2")
+                    else -> AlertDialog.Builder(this).setTitle("관리 캘린더 1.3")
                         .setMessage("관리 시스템 달력을 휴대폰에서 보고 고치는 앱이에요.\n\n· 관리 시스템이 열릴 때마다 달력이 새로 맞춰져요.\n· 앱에서 추가·수정·완료한 내용은 앱과 위젯에 바로 보이고, 관리 시스템을 열면 그쪽에도 들어가요.\n· 홈 화면 위젯: 빈 곳 길게 누르기 → 위젯 → 관리 캘린더")
                         .setPositiveButton("닫기", null).show()
                 }
