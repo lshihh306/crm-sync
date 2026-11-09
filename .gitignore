@@ -5,3 +5,5 @@ android/local.properties
 *.iml
 .idea/
 crmsync.apk
+android/cal/build/
+kcal.apk

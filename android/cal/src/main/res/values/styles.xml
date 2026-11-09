@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="KcalTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">#3456c8</item>
+        <item name="colorAccent">#3456c8</item>
+        <item name="android:statusBarColor">?android:attr/colorBackground</item>
+        <item name="android:windowLightStatusBar">@bool/light_status</item>
+    </style>
+</resources>

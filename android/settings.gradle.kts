@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "CrmSync"
 include(":app")
+include(":cal")
