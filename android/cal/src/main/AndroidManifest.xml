@@ -26,7 +26,7 @@
         <!-- 홈 화면 위젯: 한 달 달력 -->
         <receiver
             android:name=".MonthWidget"
-            android:exported="false"
+            android:exported="true"
             android:label="관리 캘린더">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

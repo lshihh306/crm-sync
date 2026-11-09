@@ -39,8 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var monthView: MonthView
     private lateinit var title: TextView
     private lateinit var status: TextView
-    private lateinit var dayHead: TextView
-    private lateinit var dayList: LinearLayout
+    private var dayDlg: AlertDialog? = null
     private val io = Executors.newSingleThreadExecutor()
     private var month: YearMonth = YearMonth.now()
     private var sel: LocalDate = LocalDate.now()
@@ -91,26 +90,18 @@ class MainActivity : AppCompatActivity() {
         root.addView(status)
 
         monthView = MonthView(this, pal).apply {
-            onPick = { d -> sel = d; if (YearMonth.from(d) != month) month = YearMonth.from(d); render() }
+            onPick = { d -> sel = d; if (YearMonth.from(d) != month) month = YearMonth.from(d); render(); showDay(d) }
             onSwipe = { n -> month = month.plusMonths(n.toLong()); render() }
         }
-        root.addView(monthView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.45f))
-
-        val dayBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), 0) }
-        val dh = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        dayHead = TextView(this).apply { textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(pal.fg) }
-        dh.addView(dayHead, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        dh.addView(Button(this).apply {
-            text = "+ 일정"; isAllCaps = false; textSize = 14f; setTextColor(pal.accentFg)
-            background = round(pal.accent, dp(18).toFloat()); setPadding(dp(16), 0, dp(16), 0); minHeight = dp(38); minimumHeight = dp(38)
-            setOnClickListener { editEvent(null) }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)))
-        dayBox.addView(dh)
-        val sc = ScrollView(this)
-        dayList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(6), 0, dp(24)) }
-        sc.addView(dayList)
-        dayBox.addView(sc, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        root.addView(dayBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        // 달력은 화면 가득 + 오른쪽 아래 [+] 버튼 (관리 시스템 캘린더처럼)
+        val frame = FrameLayout(this)
+        frame.addView(monthView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        frame.addView(TextView(this).apply {
+            text = "+"; textSize = 30f; setTextColor(pal.accentFg); gravity = Gravity.CENTER
+            background = round(pal.accent, dp(30).toFloat()); elevation = dp(6).toFloat()
+            contentDescription = "일정 추가"; setOnClickListener { editEvent(null) }
+        }, FrameLayout.LayoutParams(dp(60), dp(60), Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(18), dp(22)) })
+        root.addView(frame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
         setContentView(root)
     }
@@ -128,19 +119,6 @@ class MainActivity : AppCompatActivity() {
     private fun render() {
         title.text = "${month.year}년 ${month.monthValue}월"
         monthView.byDate = byDate; monthView.month = month; monthView.selected = sel
-        val dow = sel.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
-        dayHead.text = "${sel.monthValue}월 ${sel.dayOfMonth}일 ($dow)"
-        dayList.removeAllViews()
-        val list = byDate[sel.toString()].orEmpty()
-        val hol = list.filter { it.isHoliday }
-        hol.forEach { h ->
-            dayList.addView(TextView(this).apply { text = "🎌 ${h.title}"; setTextColor(pal.sun); textSize = 14f; setPadding(dp(4), dp(4), 0, dp(6)) })
-        }
-        val rest = list.filter { !it.isHoliday }
-        if (rest.isEmpty()) {
-            dayList.addView(TextView(this).apply { text = "일정이 없어요. [+ 일정]으로 추가하세요."; setTextColor(pal.muted); textSize = 14f; setPadding(dp(4), dp(10), 0, 0) })
-        }
-        rest.forEach { dayList.addView(itemRow(it)) }
         val syn = st.syncedAt.takeIf { it.length >= 16 }?.let { runCatching { java.time.OffsetDateTime.parse(it).atZoneSameInstant(java.time.ZoneId.of("Asia/Seoul")) }.getOrNull() }
         status.text = buildString {
             if (loading) append("불러오는 중… ")
@@ -150,10 +128,29 @@ class MainActivity : AppCompatActivity() {
         MonthWidget.updateAll(this)
     }
 
+    /** 날짜 누르면 그날 일정 창 (관리 시스템처럼) */
+    private fun showDay(d: LocalDate) {
+        dayDlg?.dismiss()
+        val list = byDate[d.toString()].orEmpty()
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(4), dp(20), dp(8)) }
+        list.filter { it.isHoliday }.forEach { h ->
+            box.addView(TextView(this).apply { text = "🎌 ${h.title}"; setTextColor(pal.sun); textSize = 14f; setPadding(0, dp(2), 0, dp(6)) })
+        }
+        val rest = list.filter { !it.isHoliday }
+        if (rest.isEmpty()) box.addView(TextView(this).apply { text = "일정이 없어요."; setTextColor(pal.muted); textSize = 15f; setPadding(0, dp(10), 0, dp(10)) })
+        rest.forEach { box.addView(itemRow(it)) }
+        val dow = d.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
+        dayDlg = AlertDialog.Builder(this).setTitle("${d.monthValue}월 ${d.dayOfMonth}일 ($dow)")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("+ 일정 추가") { _, _ -> editEvent(null) }
+            .setNegativeButton("닫기", null)
+            .show()
+    }
+
     private fun itemRow(it: Item): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(4), 0, dp(4)); setOnClickListener { _ -> itemMenu(it) }
+            setPadding(0, dp(6), 0, dp(6)); setOnClickListener { _ -> dayDlg?.dismiss(); itemMenu(it) }
         }
         val strip = View(this).apply { background = round(it.bg, dp(3).toFloat()); alpha = if (it.done) 0.5f else 1f }
         row.addView(strip, LinearLayout.LayoutParams(dp(6), dp(46)).apply { rightMargin = dp(10) })
@@ -192,6 +189,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 byDate = st.byDate(); render()
                 toast(err?.message ?: ok)
+                if (!isFinishing) showDay(sel)
             }
         }
     }
@@ -338,7 +336,7 @@ class MainActivity : AppCompatActivity() {
                 when (w) {
                     0 -> askToken(first = false)
                     1 -> refresh(true)
-                    else -> AlertDialog.Builder(this).setTitle("관리 캘린더 1.0")
+                    else -> AlertDialog.Builder(this).setTitle("관리 캘린더 1.1")
                         .setMessage("관리 시스템 달력을 휴대폰에서 보고 고치는 앱이에요.\n\n· 관리 시스템이 열릴 때마다 달력이 새로 맞춰져요.\n· 앱에서 추가·수정·완료한 내용은 앱과 위젯에 바로 보이고, 관리 시스템을 열면 그쪽에도 들어가요.\n· 홈 화면 위젯: 빈 곳 길게 누르기 → 위젯 → 관리 캘린더")
                         .setPositiveButton("닫기", null).show()
                 }
