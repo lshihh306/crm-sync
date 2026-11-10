@@ -29,7 +29,7 @@ footer{margin-top:18px;text-align:center}
 <main>
   <div class="card" id="ask">
     <h1>광고 문자 수신거부</h1>
-    <p>현대자동차 신대치대리점 이성훈 차장이 보내는 <b>혜택·광고 문자</b>를 더 이상 받지 않으시려면 아래 버튼을 눌러 주세요.</p>
+    <p>현대·제네시스 신대치대리점 이성훈 차장이 보내는 <b>혜택·광고 문자</b>를 더 이상 받지 않으시려면 아래 버튼을 눌러 주세요.</p>
     <div id="byCode" hidden>
       <p class="muted">받으시는 번호</p>
       <p class="num" id="masked"></p>
@@ -63,18 +63,20 @@ function decode(c){
   return /^01[016789]\d{7,8}$/.test(p)?p:null;
 }
 function mask(p){ return p.slice(0,3)+"-****-"+p.slice(-4); }
-var code=new URLSearchParams(location.search).get("c");
+var qs=new URLSearchParams(location.search);
+var line=qs.get("m")?"main":"second"; // ?m= 본폰 문자, ?c= 세컨폰 문자
+var code=qs.get("m")||qs.get("c");
 var phone=decode(code);
 var $=function(id){return document.getElementById(id);};
 if(phone){ $("byCode").hidden=false; $("masked").textContent=mask(phone); }
 else { $("byInput").hidden=false; code=null; }
 $("go").onclick=function(){
   var body;
-  if(code) body={c:code};
+  if(code) body={c:code,line:line};
   else{
     var d=$("ph").value.replace(/\D/g,"");
     if(!/^01[016789]\d{7,8}$/.test(d)){ $("err").textContent="휴대폰 번호를 정확히 입력해 주세요."; $("err").hidden=false; return; }
-    body={phone:d}; phone=d;
+    body={phone:d,line:line}; phone=d;
   }
   $("go").disabled=true; $("go").textContent="처리 중…"; $("err").hidden=true;
   fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)})
