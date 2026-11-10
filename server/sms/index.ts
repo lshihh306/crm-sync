@@ -47,6 +47,8 @@ function adWrap(kind: string, body: string, phone: string) {
 }
 // 광고 단체문자는 하루 이만큼만 (KT: 하루 150건 넘는 날이 한 달 10번 넘으면 제한)
 const PROMO_PER_DAY = 110;
+// 광고 단체문자는 매일 오전 10시부터 (2026-11-10 사용자 요청)
+const PROMO_FROM = 10;
 
 // 사진 문자: 사진 id들 → {id: {mime, data(base64)}}
 async function mediaMap(ids: (string | null | undefined)[]) {
@@ -198,7 +200,7 @@ Deno.serve(async (req) => {
       continue;
     }
     if (busy.has(c.phone)) continue; // 오늘 이미 이 번호로 다른 자동 문자가 나감 → 다음 날 나감
-    if (c.kind === "promo") { if (promoLeft <= 0) continue; promoLeft--; }
+    if (c.kind === "promo") { if (h < PROMO_FROM || promoLeft <= 0) continue; promoLeft--; }
     busy.add(c.phone); bodies.add(bk); if (ho) hols.add(c.phone + "|" + ho);
     due.push(c);
   }
